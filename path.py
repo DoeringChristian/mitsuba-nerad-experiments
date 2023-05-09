@@ -2,7 +2,6 @@ import mitsuba as mi
 import drjit as dr
 import matplotlib.pyplot as plt
 from dataclasses import dataclass
-import matplotlib.pyplot as plt
 
 mi.set_variant("cuda_ad_rgb")
 
