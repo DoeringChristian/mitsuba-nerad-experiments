@@ -24,64 +24,12 @@ class PathIntegrator(mi.SamplingIntegrator):
         self.n = 0
         self.film_size: None | mi.Vector2u = None
 
-    def render(
-        self,
-        scene: mi.Scene,
-        sensor: mi.Sensor,
-        seed: int = 0,
-        spp: int = 1,
-        develop: bool = True,
-        evaluate: bool = True,
-    ):
-        film = sensor.film()
-
-        film_size = film.crop_size()
-
-        if self.film_size is None:
-            self.film_size = film_size
-
-        wavefront_size = film_size.x * film_size.y * spp
-        print(f"{wavefront_size=}")
-
-        sampler = sensor.sampler()
-        sampler.set_sample_count(spp)
-        sampler.set_samples_per_wavefront(spp)
-        sampler.seed(seed, wavefront_size)
-
-        idx = dr.arange(mi.UInt, wavefront_size)
-
-        pos = mi.Vector2u()
-        pos.y = idx // film_size.x
-        pos.x = dr.fma(-film_size.x, pos.y, idx)
-
-        sample_pos = (mi.Point2f(pos) + sampler.next_2d()) / mi.Point2f(
-            film.crop_size()
-        )
-        ray, ray_weight = sensor.sample_ray(0.0, 0.0, sample_pos, mi.Point2f(0.5))
-
-        spec = ray_weight * self.sample(scene, sampler, ray)
-
-        film.prepare(self.aov_names())
-
-        block: mi.ImageBlock = film.create_block()
-
-        aovs = [spec.x, spec.y, spec.z, mi.Float(1.0)]
-
-        block.put(pos, aovs)
-
-        film.put_block(block)
-
-        res = film.develop()
-        dr.schedule(res)
-        dr.eval()
-
-        return res
-
     def sample(
         self,
         scene: mi.Scene,
         sampler: mi.Sampler,
         ray: mi.Ray3f,
+        medium: mi.Medium = None,
         active: bool = True,
     ) -> mi.Color3f:
         # --------------------- Configure loop state ----------------------
@@ -205,7 +153,7 @@ class PathIntegrator(mi.SamplingIntegrator):
                 active_next & (~rr_active | rr_continue) & (dr.neq(throughput_max, 0.0))
             )
 
-        return dr.select(valid_ray, result, 0.0)
+        return dr.select(valid_ray, result, 0.0), dr.neq(depth, 0), []
 
 
 mi.register_integrator("path_test", lambda props: PathIntegrator(props))
@@ -216,7 +164,8 @@ if __name__ == "__main__":
 
         integrator: mi.Integrator = mi.load_dict({"type": "path_test"})
 
-        img = integrator.render(scene, scene.sensors()[0], 0)
+        # img = integrator.render(scene, scene.sensors()[0], 0)
+        img = mi.render(scene, integrator=integrator)
 
         plt.imshow(img)
         plt.show()

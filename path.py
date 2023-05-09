@@ -58,7 +58,7 @@ class PathIntegrator(mi.SamplingIntegrator):
         )
         ray, ray_weight = sensor.sample_ray(0.0, 0.0, sample_pos, mi.Point2f(0.5))
 
-        spec = ray_weight * self.sample(scene, sampler, ray)
+        spec, _, _ = ray_weight * self.sample(scene, sampler, ray)
 
         film.prepare(self.aov_names())
 
@@ -81,6 +81,7 @@ class PathIntegrator(mi.SamplingIntegrator):
         scene: mi.Scene,
         sampler: mi.Sampler,
         ray: mi.Ray3f,
+        medium: mi.Medium = None,
         active: bool = True,
     ) -> mi.Color3f:
         # --------------------- Configure loop state ----------------------
@@ -204,7 +205,7 @@ class PathIntegrator(mi.SamplingIntegrator):
                 active_next & (~rr_active | rr_continue) & (dr.neq(throughput_max, 0.0))
             )
 
-        return dr.select(valid_ray, result, 0.0)
+        return dr.select(valid_ray, result, 0.0), dr.neq(depth, 0), []
 
 
 mi.register_integrator("path_test", lambda props: PathIntegrator(props))
