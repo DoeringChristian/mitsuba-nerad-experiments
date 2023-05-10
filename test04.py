@@ -23,7 +23,7 @@ small_box["bsdf"]["id"] = "glass"
 scene_dict["small-box"] = small_box
 
 scene: mi.Scene = mi.load_dict(scene_dict)
-scene = mi.load_file("./data/scenes/bathroom/scene.xml")
+# scene = mi.load_file("./data/scenes/bathroom/scene.xml")
 
 
 M = 32
@@ -358,7 +358,7 @@ class NeradIntegrator(mi.SamplingIntegrator):
 
             # update si and bsdf with the first non-specular ones
             si, bsdf, β, _ = self.first_non_specular_or_null_si(scene, si, sampler)
-            L, _ = self.sample_model(scene, si, sampler, mode="drjit")
+            L = self.render_lhs(scene, si, mode="drjit")
 
         self.model.train()
         torch.cuda.empty_cache()

@@ -6,6 +6,7 @@ def matmul(a: mi.TensorXf, b: mi.TensorXf) -> mi.TensorXf:
     assert len(a.shape) == 2
     assert a.shape[1] == b.shape[0]
 
+    # Matrix multiplication over K
     N = a.shape[0]
     M = b.shape[1]
     K = b.shape[0]
@@ -23,8 +24,8 @@ def matmul(a: mi.TensorXf, b: mi.TensorXf) -> mi.TensorXf:
     loop.set_max_iterations(K)
 
     while loop(k < K):
-        dst += dr.gather(mi.Float, a.array, i * a.shape[1] + k) * dr.gather(
-            mi.Float, b.array, k * b.shape[1] + j
+        dst += dr.gather(mi.Float, a.array, i * K + k) * dr.gather(
+            mi.Float, b.array, k * M + j
         )
 
         k += 1
