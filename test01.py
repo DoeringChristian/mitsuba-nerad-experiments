@@ -1,3 +1,4 @@
+from typing import Union
 import drjit as dr
 import mitsuba as mi
 
@@ -202,7 +203,7 @@ si, image_res = get_camera_first_bounce(scene)
 print(f"{field(si)=}")
 
 
-def render_lhs(scene, model, si):
+def render_lhs(scene, model, si, mode: str = "drjit"):
     """
     Renders the left-hand side of the rendering equation by calculating the emitter's radiance and
     the neural network output at the given surface interaction (si) position and direction (bsdf).
@@ -233,7 +234,10 @@ def render_lhs(scene, model, si):
         out = model(si)
         L = Le + dr.select(mask, mi.Spectrum(out), 0)
 
-    return L, Le, out, mask
+    if mode == "drjit":
+        return Le + dr.select(mask, mi.Spectrum(out), 0)
+    elif mode == "torch":
+        return Le.torch() + out * mask.torch().reshape(-1, 1)
 
 
 def first_non_specular_or_null_si(scene, si, bsdf, sampler):
@@ -326,7 +330,7 @@ class LHSIntegrator(ADIntegrator):
 
             # update si and bsdf with the first non-specular ones
             si, bsdf, β, _ = first_non_specular_or_null_si(scene, si, bsdf, sampler)
-            L, _, _, _ = render_lhs(scene, self.model, si)
+            L = render_lhs(scene, self.model, si, mode="drjit")
 
         self.model.train()
         torch.cuda.empty_cache()
@@ -343,7 +347,9 @@ fig.tight_layout()  # Remove any extra white spaces around the image
 ax.imshow(np.clip(lhs_image ** (1.0 / 2.2), 0, 1))
 
 
-def render_rhs(scene, model, si, sampler):
+def render_rhs(
+    scene, model, si, sampler, mode="drjit"
+) -> Union[torch.Tensor, mi.TensorXf]:
     with dr.suspend_grad():
         bsdf_ctx = mi.BSDFContext()
 
@@ -416,7 +422,10 @@ def render_rhs(scene, model, si, sampler):
         w_nr = β * mis
         L = Le + dr.select(active_nr, w_nr * mi.Spectrum(out), 0)
 
-    return L, Le, out, w_nr, active_nr
+    if mode == "drjit":
+        return L
+    elif mode == "torch":
+        return Le.torch() + out * dr.select(active_nr, w_nr, 0).torch()
 
 
 class RHSIntegrator(ADIntegrator):
@@ -448,7 +457,7 @@ class RHSIntegrator(ADIntegrator):
 
             # update si and bsdf with the first non-specular ones
             si, bsdf, β, _ = first_non_specular_or_null_si(scene, si, bsdf, sampler)
-            L, _, _, _, _ = render_rhs(scene, self.model, si, sampler)
+            L = render_rhs(scene, self.model, si, sampler, mode="drjit")
 
         self.model.train()
         torch.cuda.empty_cache()
@@ -493,14 +502,15 @@ for step in tqdm_iterator:
     # bsdf_rhs = dr.gather(type(bsdf_lhs), bsdf_lhs, indices)
 
     # LHS and RHS evaluation
-    _, Le_lhs, out_lhs, mask_lhs = render_lhs(scene, field, si_lhs)
-    _, Le_rhs, out_rhs, weight_rhs, mask_rhs = render_rhs(
-        scene, field, si_rhs, _r_sampler
-    )
-    weight_rhs = weight_rhs.torch() * mask_rhs.torch()
+    lhs = render_lhs(scene, field, si_lhs, mode="torch")
+    # _, Le_rhs, out_rhs, weight_rhs, mask_rhs = render_rhs(
+    #     scene, field, si_rhs, _r_sampler
+    # )
+    rhs = render_rhs(scene, field, si_rhs, _r_sampler, mode="torch")
+    # weight_rhs = weight_rhs.torch() * mask_rhs.torch()
 
-    lhs = Le_lhs.torch() + out_lhs * mask_lhs.torch().reshape(-1, 1)
-    rhs = Le_rhs.torch() + out_rhs * weight_rhs
+    # lhs = Le_lhs.torch() + out_lhs * mask_lhs.torch().reshape(-1, 1)
+    # rhs = Le_rhs.torch() + out_rhs * weight_rhs
     rhs = rhs.reshape(batch_size, M // 2, 3).mean(dim=1)
 
     norm = 1
