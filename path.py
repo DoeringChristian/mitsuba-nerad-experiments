@@ -165,9 +165,11 @@ class PathIntegrator(mi.SamplingIntegrator):
 
             bsdf_val = si.to_world_mueller(bsdf_val, -wo, si.wi)
 
-            mi_em = dr.select(ds.delta, 1.0, mis_weight(ds.pdf, bsdf_pdf))
+            mis_em = dr.select(ds.delta, 1.0, mis_weight(ds.pdf, bsdf_pdf))
 
-            result[active_em] = dr.fma(throughput, bsdf_val * em_weight * mi_em, result)
+            result[active_em] = dr.fma(
+                throughput, bsdf_val * em_weight * mis_em, result
+            )
 
             # ---------------------- BSDF sampling ----------------------
 
