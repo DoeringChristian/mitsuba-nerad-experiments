@@ -506,18 +506,27 @@ integrator.train()
 image_sh = mi.render(scene, spp=16, integrator=integrator)
 losses_sh = integrator.train_losses
 
+field = NRFieldSh(scene, wi_order=2)
+integrator = NeradIntegrator(field)
+integrator.train()
+image_sh_2 = mi.render(scene, spp=16, integrator=integrator)
+losses_sh_2 = integrator.train_losses
+
 ref_image = mi.render(scene, spp=16)
 
-fig, ax = plt.subplots(2, 2)
+fig, ax = plt.subplots(2, 3, figsize=(10, 10))
 fig.patch.set_visible(False)  # Hide the figure's background
 ax[0][0].axis("off")  # Remove the axes from the image
 ax[0][0].imshow(mi.util.convert_to_bitmap(image_orig))
 ax[0][1].axis("off")
 ax[0][1].imshow(mi.util.convert_to_bitmap(image_sh))
+ax[0][2].axis("off")
+ax[0][2].imshow(mi.util.convert_to_bitmap(image_sh_2))
 ax[1][0].axis("off")
 ax[1][0].imshow(mi.util.convert_to_bitmap(ref_image))
 ax[1][1].plot(losses_orig, color="red")
 ax[1][1].plot(losses_sh, color="green")
+ax[1][1].plot(losses_sh_2, color="yellow")
 fig.tight_layout()  # Remove any extra white spaces around the image
 
 plt.show()
