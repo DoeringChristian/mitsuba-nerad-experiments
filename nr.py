@@ -22,8 +22,10 @@ def mis_weight(pdf_a: mi.Float, pdf_b: mi.Float) -> mi.Float:
     return dr.detach(dr.select(pdf_a > 0, a2 / dr.fma(pdf_b, pdf_b, a2), 0), True)
 
 
-def n_sh_coeffs(order) -> int:
-    return 2 * order + 1
+def vec_to_tens_safe(vec):
+    # A utility function that converts a Vector3f to a TensorXf safely in mitsuba while keeping the gradients;
+    # a regular type cast mi.TensorXf(vector) detaches the gradients
+    return mi.TensorXf(dr.ravel(vec), shape=[dr.shape(vec)[1], dr.shape(vec)[0]])
 
 
 class RadianceMLP(nn.Module):
@@ -80,13 +82,10 @@ class RadianceMLP(nn.Module):
             n = si.sh_frame.n
             f_d = si.bsdf().eval_diffuse_reflectance(si)
 
-        def to_tensor(val):
-            return mi.TensorXf(dr.ravel(val), [dr.shape(val)[1], dr.shape(val)[0]])
-
-        x = to_tensor(x + self.grad_activator)
-        wi = to_tensor(wi)
-        n = to_tensor(n)
-        f_d = to_tensor(si.bsdf().eval_diffuse_reflectance(si))
+        x = vec_to_tens_safe(x + self.grad_activator)
+        wi = vec_to_tens_safe(wi)
+        n = vec_to_tens_safe(n)
+        f_d = vec_to_tens_safe(si.bsdf().eval_diffuse_reflectance(si))
 
         @dr.wrap_ad("drjit", "torch")
         def internal(x, wi, n, f_d):
@@ -161,6 +160,11 @@ class PathIntegrator(mi.SamplingIntegrator):
         shape_sampler = mi.DiscreteDistribution(m_area)
 
         self.network.train()
+        params = mi.traverse(self)
+        print(f"{params=}")
+        dr.enable_grad(params["grad_activator"])
+        print(f"{dr.grad_enabled(params['grad_activator'])=}")
+
         opt = torch.optim.Adam(self.network.parameters(), lr=5e-4)
 
         for i in tqdm(range(200)):
@@ -172,13 +176,15 @@ class PathIntegrator(mi.SamplingIntegrator):
 
             LHS = mi.Color3f(LHS[0], LHS[1], LHS[2])
 
-            RHS: torch.Tensor = RHS.torch()
-            LHS: torch.Tensor = LHS.torch()
+            # RHS: torch.Tensor = RHS.torch()
+            # LHS: torch.Tensor = LHS.torch()
 
-            print(f"{RHS.grad=}")
+            # print(f"{RHS.grad=}")
 
-            loss = torch.nn.MSELoss()(RHS, LHS)
-            loss.backward()
+            # loss = torch.nn.MSELoss()(RHS, LHS)
+            # loss.backward()
+            loss = dr.sqr(RHS - LHS)
+            dr.backward(loss)
             opt.step()
 
         ...
