@@ -494,10 +494,10 @@ class NeradIntegrator(mi.SamplingIntegrator):
 # train_losses = []
 # tqdm_iterator = tqdm(range(total_steps))
 
-field = NRFieldOrig(scene)
+field = NRFieldOrig(scene, n_hidden=4)
 integrator = NeradIntegrator(field)
 integrator.train()
-image_orig = mi.render(scene, spp=1, integrator=integrator)
+image_orig = mi.render(scene, spp=16, integrator=integrator)
 losses_orig = integrator.train_losses
 
 # field = NRFieldSh(scene)
