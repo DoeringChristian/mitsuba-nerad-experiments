@@ -23,7 +23,7 @@ small_box["bsdf"]["id"] = "glass"
 scene_dict["small-box"] = small_box
 
 scene: mi.Scene = mi.load_dict(scene_dict)
-# scene = mi.load_file("./data/scenes/bathroom/scene.xml")
+# scene = mi.load_file("./data/scenes/veach-ajar/scene.xml")
 
 
 M = 32
@@ -497,36 +497,36 @@ class NeradIntegrator(mi.SamplingIntegrator):
 field = NRFieldOrig(scene)
 integrator = NeradIntegrator(field)
 integrator.train()
-image_orig = mi.render(scene, spp=16, integrator=integrator)
+image_orig = mi.render(scene, spp=1, integrator=integrator)
 losses_orig = integrator.train_losses
 
-field = NRFieldSh(scene)
-integrator = NeradIntegrator(field)
-integrator.train()
-image_sh = mi.render(scene, spp=16, integrator=integrator)
-losses_sh = integrator.train_losses
+# field = NRFieldSh(scene)
+# integrator = NeradIntegrator(field)
+# integrator.train()
+# image_sh = mi.render(scene, spp=16, integrator=integrator)
+# losses_sh = integrator.train_losses
 
-field = NRFieldSh(scene, wi_order=2)
-integrator = NeradIntegrator(field)
-integrator.train()
-image_sh_2 = mi.render(scene, spp=16, integrator=integrator)
-losses_sh_2 = integrator.train_losses
+# field = NRFieldSh(scene, wi_order=2)
+# integrator = NeradIntegrator(field)
+# integrator.train()
+# image_sh_2 = mi.render(scene, spp=16, integrator=integrator)
+# losses_sh_2 = integrator.train_losses
 
 ref_image = mi.render(scene, spp=16)
 
-fig, ax = plt.subplots(2, 3, figsize=(10, 10))
+fig, ax = plt.subplots(2, 2, figsize=(10, 10))
 fig.patch.set_visible(False)  # Hide the figure's background
 ax[0][0].axis("off")  # Remove the axes from the image
 ax[0][0].imshow(mi.util.convert_to_bitmap(image_orig))
-ax[0][1].axis("off")
-ax[0][1].imshow(mi.util.convert_to_bitmap(image_sh))
-ax[0][2].axis("off")
-ax[0][2].imshow(mi.util.convert_to_bitmap(image_sh_2))
+# ax[0][1].axis("off")
+# ax[0][1].imshow(mi.util.convert_to_bitmap(image_sh))
+# ax[0][2].axis("off")
+# ax[0][2].imshow(mi.util.convert_to_bitmap(image_sh_2))
 ax[1][0].axis("off")
 ax[1][0].imshow(mi.util.convert_to_bitmap(ref_image))
 ax[1][1].plot(losses_orig, color="red")
-ax[1][1].plot(losses_sh, color="green")
-ax[1][1].plot(losses_sh_2, color="yellow")
+# ax[1][1].plot(losses_sh, color="green")
+# ax[1][1].plot(losses_sh_2, color="yellow")
 fig.tight_layout()  # Remove any extra white spaces around the image
 
 plt.show()
