@@ -506,8 +506,8 @@ class NeradIntegrator(mi.SamplingIntegrator):
 field = NRFieldOrig(scene, n_hidden=3)
 integrator = NeradIntegrator(field)
 integrator.train()
-image_1 = mi.render(scene, spp=2, integrator=integrator)
-# image_2 = mi.render(scene, spp=2, integrator=integrator, sensor=1)
+image_1 = mi.render(scene, spp=1, integrator=integrator)
+image_2 = mi.render(scene, spp=1, integrator=integrator, sensor=1)
 losses_orig = integrator.train_losses
 
 ref_image = mi.render(scene, spp=16)
@@ -516,8 +516,8 @@ fig, ax = plt.subplots(2, 2, figsize=(10, 10))
 fig.patch.set_visible(False)  # Hide the figure's background
 ax[0][0].axis("off")  # Remove the axes from the image
 ax[0][0].imshow(mi.util.convert_to_bitmap(image_1))
-# ax[0][1].axis("off")  # Remove the axes from the image
-# ax[0][1].imshow(mi.util.convert_to_bitmap(image_2))
+ax[0][1].axis("off")  # Remove the axes from the image
+ax[0][1].imshow(mi.util.convert_to_bitmap(image_2))
 # ax[0][1].axis("off")
 # ax[0][1].imshow(mi.util.convert_to_bitmap(image_sh))
 # ax[0][2].axis("off")
