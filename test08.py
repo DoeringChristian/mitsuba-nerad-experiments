@@ -4,6 +4,8 @@ import mitsuba as mi
 import mitsuba
 
 mi.set_variant("cuda_ad_rgb")
+# mi.set_log_level(mi.LogLevel.Trace)
+dr.set_log_level(dr.LogLevel.Trace)
 
 import os
 
@@ -23,7 +25,8 @@ from tqdm import tqdm
 # scene_dict["small-box"] = small_box
 #
 # scene: mi.Scene = mi.load_dict(scene_dict)
-scene = mi.load_file("./data/scenes/glass-of-water/scene_v3.xml")
+# scene = mi.load_file("./data/scenes/teapot-full/scene_v3.xml")
+scene = mi.load_file("./data/scenes/bathroom/scene.xml")
 
 
 M = 32
@@ -429,7 +432,7 @@ losses_orig = integrator.train_losses
 
 ref_image = mi.render(scene, spp=16)
 
-fig, ax = plt.subplots(2, 3, figsize=(10, 10))
+fig, ax = plt.subplots(2, 2, figsize=(10, 10))
 fig.patch.set_visible(False)  # Hide the figure's background
 ax[0][0].axis("off")  # Remove the axes from the image
 ax[0][0].imshow(mi.util.convert_to_bitmap(image_orig))
