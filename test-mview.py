@@ -4,8 +4,6 @@ import mitsuba as mi
 import mitsuba
 
 mi.set_variant("cuda_ad_rgb")
-# mi.set_log_level(mi.LogLevel.Trace)
-# dr.set_log_level(dr.LogLevel.Trace)
 
 import os
 
@@ -25,14 +23,14 @@ small_box["bsdf"]["id"] = "glass"
 scene_dict["small-box"] = small_box
 
 scene: mi.Scene = mi.load_dict(scene_dict)
-# scene = mi.load_file("./data/scenes/teapot-full/scene_v3.xml")
-# scene = mi.load_file("./data/scenes/bathroom/scene.xml")
+# scene = mi.load_file("./data/scenes/caustics/scene.xml")
+scene = mi.load_file("./data/scenes/cornell-box/scene.xml")
 
 
 M = 32
 batch_size = 2**14
 total_steps = 1000
-lr = 1e-4
+lr = 5e-4
 seed = 42
 
 
@@ -285,7 +283,9 @@ class NeradIntegrator(mi.SamplingIntegrator):
         # return si at the first non-specular bounce or null face
         return si, bsdf, β, null_face
 
-    def render_lhs(self, scene, si, mode: str = "drjit"):
+    def render_lhs(
+        self, scene: mi.Scene, si: mi.SurfaceInteraction3f, mode: str = "drjit"
+    ) -> mi.Color3f | torch.Tensor:
         """
         Renders the left-hand side of the rendering equation by calculating the emitter's radiance and
         the neural network output at the given surface interaction (si) position and direction (bsdf).
@@ -321,7 +321,9 @@ class NeradIntegrator(mi.SamplingIntegrator):
         elif mode == "torch":
             return Le.torch() + out * mask.torch().reshape(-1, 1)
 
-    def render_rhs(self, scene, si, sampler, mode="drjit") -> mi.Color3d | torch.Tensor:
+    def render_rhs(
+        self, scene: mi.Scene, si: mi.SurfaceInteraction3f, sampler, mode="drjit"
+    ) -> mi.Color3d | torch.Tensor:
         with dr.suspend_grad():
             bsdf_ctx = mi.BSDFContext()
 
@@ -497,10 +499,15 @@ class NeradIntegrator(mi.SamplingIntegrator):
         self.train_losses = train_losses
 
 
-field = NRFieldOrig(scene, n_hidden=3)
+# optimizer = torch.optim.Adam(field.parameters(), lr=lr)
+# train_losses = []
+# tqdm_iterator = tqdm(range(total_steps))
+
+field = NRFieldOrig(scene, n_hidden=8)
 integrator = NeradIntegrator(field)
 integrator.train()
-image_orig = mi.render(scene, spp=1, integrator=integrator)
+image_1 = mi.render(scene, spp=1, integrator=integrator)
+image_2 = mi.render(scene, spp=1, integrator=integrator, sensor=1)
 losses_orig = integrator.train_losses
 
 ref_image = mi.render(scene, spp=16)
@@ -508,7 +515,9 @@ ref_image = mi.render(scene, spp=16)
 fig, ax = plt.subplots(2, 2, figsize=(10, 10))
 fig.patch.set_visible(False)  # Hide the figure's background
 ax[0][0].axis("off")  # Remove the axes from the image
-ax[0][0].imshow(mi.util.convert_to_bitmap(image_orig))
+ax[0][0].imshow(mi.util.convert_to_bitmap(image_1))
+ax[0][1].axis("off")  # Remove the axes from the image
+ax[0][1].imshow(mi.util.convert_to_bitmap(image_2))
 # ax[0][1].axis("off")
 # ax[0][1].imshow(mi.util.convert_to_bitmap(image_sh))
 # ax[0][2].axis("off")

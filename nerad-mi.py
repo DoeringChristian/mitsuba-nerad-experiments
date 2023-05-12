@@ -30,6 +30,7 @@ small_box["bsdf"]["id"] = "glass"
 scene_dict["small-box"] = small_box
 
 scene: mi.Scene = mi.load_dict(scene_dict)
+scene = mi.load_file("./data/scenes/cornell-box/scene.xml")
 original_image = mi.render(scene, spp=16)
 
 fig, axs = plt.subplots()

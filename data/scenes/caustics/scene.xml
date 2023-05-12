@@ -1,0 +1,79 @@
+<scene version="2.1.0">
+
+<!-- Defaults, these can be set via the command line: -Darg=value -->
+
+	<default name="spp" value="4096"/>
+	<default name="resx" value="1920"/>
+	<default name="resy" value="1080"/>
+
+<!-- Camera and Rendering Parameters -->
+
+	<integrator type="path">
+		<integer name="max_depth" value="12"/>
+	</integrator>
+	<sensor type="perspective">
+		<string name="fov_axis" value="x"/>
+		<float name="fov" value="39.597755"/>
+		<float name="principal_point_offset_x" value="0.000000"/>
+		<float name="principal_point_offset_y" value="-0.000000"/>
+		<float name="near_clip" value="0.100000"/>
+		<float name="far_clip" value="1000.000000"/>
+		<transform name="to_world">
+			<rotate x="1" angle="-146.33907059032762"/>
+			<rotate y="1" angle="-54.95948598672278"/>
+			<rotate z="1" angle="-179.9999230466863"/>
+			<translate value="6.280424 5.113652 4.431211"/>
+		</transform>
+		<sampler type="independent">
+			<integer name="sample_count" value="$spp"/>
+		</sampler>
+		<film type="hdrfilm">
+			<integer name="width" value="$resx"/>
+			<integer name="height" value="$resy"/>
+		</film>
+	</sensor>
+
+<!-- Materials -->
+
+	<bsdf type="twosided" id="default-bsdf">
+		<bsdf type="diffuse"/>
+	</bsdf>
+	<bsdf type="principled" id="mat-Material.001">
+		<rgb value="0.800000 0.800000 0.800000" name="base_color"/>
+		<float name="spec_tint" value="0.000000"/>
+		<float name="spec_trans" value="1.000000"/>
+		<float name="metallic" value="0.000000"/>
+		<float name="anisotropic" value="0.000000"/>
+		<float name="roughness" value="0.000000"/>
+		<float name="sheen" value="0.000000"/>
+		<float name="sheen_tint" value="0.500000"/>
+		<float name="clearcoat" value="0.000000"/>
+		<float name="clearcoat_gloss" value="0.173205"/>
+		<float name="eta" value="1.450000"/>
+	</bsdf>
+
+<!-- Emitters -->
+
+	<shape type="rectangle">
+		<boolean name="flip_normals" value="true"/>
+		<transform name="to_world">
+			<matrix value="0.049310 0.000000 -0.062577 -2.014854 0.062577 0.000000 0.049310 1.276298 0.000000 -0.079670 0.000000 0.080131 0.000000 0.000000 0.000000 1.000000"/>
+		</transform>
+		<emitter type="area">
+			<rgb value="9846.641602 9846.641602 9846.641602" name="radiance"/>
+		</emitter>
+		<bsdf type="null"/>
+	</shape>
+
+<!-- Shapes -->
+
+	<shape type="ply">
+		<string name="filename" value="meshes/Plane.ply"/>
+		<boolean name="face_normals" value="true"/>
+		<ref id="default-bsdf" name="bsdf"/>
+	</shape>
+	<shape type="ply">
+		<string name="filename" value="meshes/Suzanne.ply"/>
+		<ref id="mat-Material.001" name="bsdf"/>
+	</shape>
+</scene>
