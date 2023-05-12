@@ -48,6 +48,8 @@ class NRFieldOrig(nn.Module):
         self.bbox = scene.bbox()
 
         enc_config = {
+            "otype": "Grid",
+            "type": "Hash",
             "base_resolution": 16,
             "n_levels": 8,
             "n_features_per_level": 4,
@@ -494,7 +496,7 @@ class NeradIntegrator(mi.SamplingIntegrator):
 # train_losses = []
 # tqdm_iterator = tqdm(range(total_steps))
 
-field = NRFieldOrig(scene)
+field = NRFieldOrig(scene, n_hidden=3)
 integrator = NeradIntegrator(field)
 integrator.train()
 image_orig = mi.render(scene, spp=1, integrator=integrator)
