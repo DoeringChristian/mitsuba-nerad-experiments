@@ -267,7 +267,6 @@ class NeradIntegrator(mi.SamplingIntegrator):
                     bsdf_sample.sampled_type, mi.BSDFFlags.BackSide
                 ) & (si.wi.z < 0)
                 active &= si.is_valid() & ~null_face
-                # active &= ~mi.has_flag(bsdf_sample.sampled_type, mi.BSDFFlags.Smooth)
                 active &= mi.has_flag(bsdf_sample.sampled_type, mi.BSDFFlags.Glossy)
 
                 ray = si.spawn_ray(si.to_world(bsdf_sample.wo))
