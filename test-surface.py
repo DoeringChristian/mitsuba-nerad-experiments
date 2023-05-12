@@ -23,8 +23,7 @@ small_box["bsdf"]["id"] = "glass"
 scene_dict["small-box"] = small_box
 
 scene: mi.Scene = mi.load_dict(scene_dict)
-# scene = mi.load_file("./data/scenes/caustics/scene.xml")
-scene = mi.load_file("./data/scenes/cornell-box/scene.xml")
+# scene = mi.load_file("./data/scenes/veach-ajar/scene.xml")
 
 
 M = 32
@@ -57,26 +56,17 @@ class NRFieldOrig(nn.Module):
             "log2_hashmap_size": 22,
         }
         self.pos_enc = NGPEncoding(3, enc_config)
-        enc_config = {
-            "otype": "SphericalHarmonics",
-            "degree": 4,
-            "base_resolution": 16,
-            "n_levels": 8,
-            "n_features_per_level": 4,
-            "log2_hashmap_size": 22,
-        }
-        self.wi_enc = NGPEncoding(3, enc_config)
 
-        in_size = 3 * 4 + self.pos_enc.n_output_dims + self.wi_enc.n_output_dims
+        in_size = 3 * 4 + self.pos_enc.n_output_dims
 
         hidden_layers = []
         for _ in range(n_hidden):
             hidden_layers.append(nn.Linear(width, width))
-            hidden_layers.append(nn.LeakyReLU(inplace=True))
+            hidden_layers.append(nn.ReLU(inplace=True))
 
         self.network = nn.Sequential(
             nn.Linear(in_size, width),
-            nn.LeakyReLU(inplace=True),
+            nn.ReLU(inplace=True),
             *hidden_layers,
             nn.Linear(width, 3),
         ).to("cuda")
@@ -98,9 +88,79 @@ class NRFieldOrig(nn.Module):
             f_d = si.bsdf().eval_diffuse_reflectance(si).torch()
 
         z_x = self.pos_enc(x)
-        z_wi = self.wi_enc(wi)
 
-        inp = torch.concat([x, wi, n, f_d, z_x, z_wi], dim=1)
+        inp = torch.concat([x, wi, n, f_d, z_x], dim=1)
+        out = self.network(inp)
+        out = torch.abs(out)
+        return out.to(torch.float32)
+
+
+class NRFieldSh(nn.Module):
+    @staticmethod
+    def sh_coeffs(n):
+        return (n + 1) ** 2
+
+    def __init__(self, scene: mi.Scene, width=256, n_hidden=8, wi_order=5) -> None:
+        """Initialize an instance of NRField.
+
+        Args:
+            bb_min (mi.ScalarBoundingBox3f): minimum point of the bounding box
+            bb_max (mi.ScalarBoundingBox3f): maximum point of the bounding box
+        """
+        super().__init__()
+        self.bbox = scene.bbox()
+
+        enc_config = {
+            "base_resolution": 16,
+            "n_levels": 8,
+            "n_features_per_level": 4,
+            "log2_hashmap_size": 22,
+        }
+        self.pos_enc = NGPEncoding(3, enc_config)
+
+        in_size = 3 * 3 + self.pos_enc.n_output_dims + NRFieldSh.sh_coeffs(wi_order) - 1
+
+        hidden_layers = []
+        for _ in range(n_hidden):
+            hidden_layers.append(nn.Linear(width, width))
+            hidden_layers.append(nn.ReLU(inplace=True))
+
+        self.network = nn.Sequential(
+            nn.Linear(in_size, width),
+            nn.ReLU(inplace=True),
+            *hidden_layers,
+            nn.Linear(width, 3),
+        ).to("cuda")
+
+        # self.rgb_net = torch.nn.Sequential(*layers)
+        self.wi_order = wi_order
+
+    def forward(self, si: mi.SurfaceInteraction3f):
+        """Forward pass for NRField.
+
+        Args:
+            si (mitsuba.SurfaceInteraction3f): surface interaction
+            bsdf (mitsuba.BSDF): bidirectional scattering distribution function
+
+        Returns:
+            torch.Tensor
+        """
+
+        with dr.suspend_grad():
+            x = ((si.p - self.bbox.min) / (self.bbox.max - self.bbox.min)).torch()
+            wi = si.to_world(si.wi)
+            sh_wi = dr.sh_eval(wi, self.wi_order)
+            sh_wi = [sh.torch()[:, None] for sh in sh_wi]
+            sh_wi = torch.concat(sh_wi[1:], dim=1)
+
+            # wi = si.to_world(si.wi).torch()
+            n = si.sh_frame.n.torch()
+            f_d = si.bsdf().eval_diffuse_reflectance(si).torch()
+
+        z_x = self.pos_enc(x)
+
+        inp = [x, sh_wi, n, f_d, z_x]
+        inp = torch.concat(inp, dim=1)
         out = self.network(inp)
         out = torch.abs(out)
         return out.to(torch.float32)
@@ -440,21 +500,30 @@ class NeradIntegrator(mi.SamplingIntegrator):
 # train_losses = []
 # tqdm_iterator = tqdm(range(total_steps))
 
-field = NRFieldOrig(scene, width=512, n_hidden=6)
+field = NRFieldOrig(scene, n_hidden=3)
 integrator = NeradIntegrator(field)
 integrator.train()
-image_1 = mi.render(scene, spp=1, integrator=integrator)
-image_2 = mi.render(scene, spp=1, integrator=integrator, sensor=1)
+image_orig = mi.render(scene, spp=1, integrator=integrator)
 losses_orig = integrator.train_losses
+
+# field = NRFieldSh(scene)
+# integrator = NeradIntegrator(field)
+# integrator.train()
+# image_sh = mi.render(scene, spp=16, integrator=integrator)
+# losses_sh = integrator.train_losses
+
+# field = NRFieldSh(scene, wi_order=2)
+# integrator = NeradIntegrator(field)
+# integrator.train()
+# image_sh_2 = mi.render(scene, spp=16, integrator=integrator)
+# losses_sh_2 = integrator.train_losses
 
 ref_image = mi.render(scene, spp=16)
 
-fig, ax = plt.subplots(2, 2, figsize=(10, 10))
+fig, ax = plt.subplots(2, 3, figsize=(10, 10))
 fig.patch.set_visible(False)  # Hide the figure's background
 ax[0][0].axis("off")  # Remove the axes from the image
-ax[0][0].imshow(mi.util.convert_to_bitmap(image_1))
-ax[0][1].axis("off")  # Remove the axes from the image
-ax[0][1].imshow(mi.util.convert_to_bitmap(image_2))
+ax[0][0].imshow(mi.util.convert_to_bitmap(image_orig))
 # ax[0][1].axis("off")
 # ax[0][1].imshow(mi.util.convert_to_bitmap(image_sh))
 # ax[0][2].axis("off")
