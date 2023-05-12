@@ -23,7 +23,7 @@ small_box["bsdf"]["id"] = "glass"
 scene_dict["small-box"] = small_box
 
 scene: mi.Scene = mi.load_dict(scene_dict)
-scene = mi.load_file("./data/scenes/veach-ajar/scene.xml")
+# scene = mi.load_file("./data/scenes/veach-ajar/scene.xml")
 
 
 M = 32
