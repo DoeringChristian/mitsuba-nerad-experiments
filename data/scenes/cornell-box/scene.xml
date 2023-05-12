@@ -56,53 +56,32 @@
 <!-- Materials -->
 
 	<bsdf type="twosided" id="mat-White">
-		<bsdf type="principled">
-			<rgb value="1.000000 1.000000 1.000000" name="base_color"/>
-			<float name="spec_tint" value="0.000000"/>
-			<float name="spec_trans" value="0.000000"/>
-			<float name="metallic" value="0.000000"/>
-			<float name="anisotropic" value="0.000000"/>
-			<float name="roughness" value="0.500000"/>
-			<float name="sheen" value="0.000000"/>
-			<float name="sheen_tint" value="0.500000"/>
-			<float name="clearcoat" value="0.000000"/>
-			<float name="clearcoat_gloss" value="0.173205"/>
-			<float name="specular" value="0.500000"/>
+		<bsdf type="diffuse">
+			<rgb value="1.000000 1.000000 1.000000" name="reflectance"/>
 		</bsdf>
 	</bsdf>
 	<bsdf type="twosided" id="mat-Red">
-		<bsdf type="principled">
-			<rgb value="1.000000 0.000000 0.000000" name="base_color"/>
-			<float name="spec_tint" value="0.000000"/>
-			<float name="spec_trans" value="0.000000"/>
-			<float name="metallic" value="0.000000"/>
-			<float name="anisotropic" value="0.000000"/>
-			<float name="roughness" value="0.500000"/>
-			<float name="sheen" value="0.000000"/>
-			<float name="sheen_tint" value="0.500000"/>
-			<float name="clearcoat" value="0.000000"/>
-			<float name="clearcoat_gloss" value="0.173205"/>
-			<float name="specular" value="0.500000"/>
+		<bsdf type="diffuse">
+			<rgb value="1.000000 0.000000 0.000000" name="reflectance"/>
 		</bsdf>
 	</bsdf>
 	<bsdf type="twosided" id="mat-Green">
-		<bsdf type="principled">
-			<rgb value="0.000000 1.000000 0.000000" name="base_color"/>
-			<float name="spec_tint" value="0.000000"/>
-			<float name="spec_trans" value="0.000000"/>
-			<float name="metallic" value="0.000000"/>
-			<float name="anisotropic" value="0.000000"/>
-			<float name="roughness" value="0.500000"/>
-			<float name="sheen" value="0.000000"/>
-			<float name="sheen_tint" value="0.500000"/>
-			<float name="clearcoat" value="0.000000"/>
-			<float name="clearcoat_gloss" value="0.173205"/>
-			<float name="specular" value="0.500000"/>
+		<bsdf type="diffuse">
+			<rgb value="0.000000 1.000000 0.000000" name="reflectance"/>
 		</bsdf>
 	</bsdf>
-	<bsdf type="dielectric" id="mat-Glass">
-		<float name="int_ior" value="1.450000"/>
-		<rgb value="1.000000 1.000000 1.000000" name="specular_transmittance"/>
+	<bsdf type="principled" id="mat-Glass">
+		<rgb value="0.800000 0.800000 0.800000" name="base_color"/>
+		<float name="spec_tint" value="0.000000"/>
+		<float name="spec_trans" value="1.000000"/>
+		<float name="metallic" value="0.000000"/>
+		<float name="anisotropic" value="0.000000"/>
+		<float name="roughness" value="0.000000"/>
+		<float name="sheen" value="0.000000"/>
+		<float name="sheen_tint" value="0.500000"/>
+		<float name="clearcoat" value="0.000000"/>
+		<float name="clearcoat_gloss" value="0.173205"/>
+		<float name="eta" value="1.450000"/>
 	</bsdf>
 	<bsdf type="twosided" id="mat-Metall">
 		<bsdf type="principled">

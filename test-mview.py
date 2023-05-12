@@ -29,7 +29,7 @@ scene = mi.load_file("./data/scenes/cornell-box/scene.xml")
 
 M = 32
 batch_size = 2**14
-total_steps = 1000
+total_steps = 100
 lr = 5e-4
 seed = 42
 
@@ -231,7 +231,6 @@ class NeradIntegrator(mi.SamplingIntegrator):
         Returns:
             tuple: A tuple containing four values:
                 - si (mi.SurfaceInteraction3f): First non-specular or null surface interaction.
-                - bsdf (mi.BSDF): Corresponding BSDF.
                 - β (mi.Spectrum): The product of the weights of all previous BSDFs.
                 - null_face (bool): A boolean mask indicating whether the surface is a null face or not.
         """
@@ -241,47 +240,53 @@ class NeradIntegrator(mi.SamplingIntegrator):
 
             depth = mi.UInt32(0)
             β = mi.Spectrum(1)
-            prev_si = dr.zeros(mi.SurfaceInteraction3f)
-            prev_bsdf_pdf = mi.Float(1.0)
-            prev_bsdf_delta = mi.Bool(True)
+            # prev_si = dr.zeros(mi.SurfaceInteraction3f)
+            # prev_bsdf_pdf = mi.Float(1.0)
+            # prev_bsdf_delta = mi.Bool(True)
 
-            bsdf = si.bsdf()
-
-            null_face = ~mi.has_flag(bsdf.flags(), mi.BSDFFlags.BackSide) & (
-                si.wi.z < 0
-            )
-            active = si.is_valid() & ~null_face  # non-null surface
-            active &= ~mi.has_flag(bsdf.flags(), mi.BSDFFlags.Smooth)  # Delta surface
+            null_face = mi.Bool(True)
+            active = mi.Bool(True)
 
             loop = mi.Loop(
                 name="first_non_specular_or_null_si",
-                state=lambda: (sampler, depth, β, active, null_face, si, bsdf),
+                state=lambda: (sampler, depth, β, active, null_face, si),
             )
             loop.set_max_iterations(6)
 
             while loop(active):
+                # for i in range(6):
                 # loop invariant: si is located at non-null and Delta surface
                 # if si is located at null or Smooth surface, end loop
+
+                bsdf: mi.BSDF = si.bsdf()
+
                 bsdf_sample, bsdf_weight = bsdf.sample(
                     bsdf_ctx, si, sampler.next_1d(), sampler.next_2d(), active
                 )
-                ray = si.spawn_ray(si.to_world(bsdf_sample.wo))
-                si = scene.ray_intersect(
-                    ray, ray_flags=mi.RayFlags.All, coherent=dr.eq(depth, 0)
-                )
-                bsdf = si.bsdf(ray)
-
-                β *= bsdf_weight
-                depth[si.is_valid()] += 1
-
-                null_face &= ~mi.has_flag(bsdf.flags(), mi.BSDFFlags.BackSide) & (
-                    si.wi.z < 0
-                )
+                null_face &= ~mi.has_flag(
+                    bsdf_sample.sampled_type, mi.BSDFFlags.BackSide
+                ) & (si.wi.z < 0)
                 active &= si.is_valid() & ~null_face
-                active &= ~mi.has_flag(bsdf.flags(), mi.BSDFFlags.Smooth)
+                # active &= ~mi.has_flag(bsdf_sample.sampled_type, mi.BSDFFlags.Smooth)
+                active &= mi.has_flag(
+                    bsdf_sample.sampled_type, mi.BSDFFlags.Glossy
+                )  # | mi.has_flag(bsdf_sample.sampled_type, mi.BSDFFlags.Delta)
+                # active &= mi.has_flag(bsdf_sample.sampled_type, mi.BSDFFlags.Empty)
+
+                ray = si.spawn_ray(si.to_world(bsdf_sample.wo))
+
+                si[active] = scene.ray_intersect(
+                    ray,
+                    ray_flags=mi.RayFlags.All,
+                    coherent=dr.eq(depth, 0),
+                    active=active,
+                )
+
+                β[active] *= bsdf_weight
+                depth[active] += 1
 
         # return si at the first non-specular bounce or null face
-        return si, bsdf, β, null_face
+        return si, β, null_face
 
     def render_lhs(
         self, scene: mi.Scene, si: mi.SurfaceInteraction3f, mode: str = "drjit"
@@ -369,11 +374,9 @@ class NeradIntegrator(mi.SamplingIntegrator):
             prev_bsdf_delta = mi.has_flag(bsdf_sample.sampled_type, mi.BSDFFlags.Delta)
 
             si = scene.ray_intersect(ray, ray_flags=mi.RayFlags.All, coherent=True)
-            bsdf = si.bsdf(ray)
 
-            si, bsdf, β2, null_face = self.first_non_specular_or_null_si(
-                scene, si, sampler
-            )
+            si, β2, null_face = self.first_non_specular_or_null_si(scene, si, sampler)
+            bsdf = si.bsdf(ray)
             β *= β2
 
             ds = mi.DirectionSample3f(scene, si=si, ref=prev_si)
@@ -419,11 +422,12 @@ class NeradIntegrator(mi.SamplingIntegrator):
             bsdf = si.bsdf(ray)
 
             # update si and bsdf with the first non-specular ones
-            si, bsdf, β, _ = self.first_non_specular_or_null_si(scene, si, sampler)
+            si, β, _ = self.first_non_specular_or_null_si(scene, si, sampler)
             L = self.render_lhs(scene, si, mode="drjit")
 
         self.model.train()
         torch.cuda.empty_cache()
+        # return mi.Color3f(β), si.is_valid(), []
         return β * L, si.is_valid(), []
 
     def train(self):
@@ -506,8 +510,8 @@ class NeradIntegrator(mi.SamplingIntegrator):
 field = NRFieldOrig(scene, n_hidden=3)
 integrator = NeradIntegrator(field)
 integrator.train()
-image_1 = mi.render(scene, spp=1, integrator=integrator)
-image_2 = mi.render(scene, spp=1, integrator=integrator, sensor=1)
+image_1 = mi.render(scene, spp=2, integrator=integrator)
+# image_2 = mi.render(scene, spp=2, integrator=integrator, sensor=1)
 losses_orig = integrator.train_losses
 
 ref_image = mi.render(scene, spp=16)
@@ -516,8 +520,8 @@ fig, ax = plt.subplots(2, 2, figsize=(10, 10))
 fig.patch.set_visible(False)  # Hide the figure's background
 ax[0][0].axis("off")  # Remove the axes from the image
 ax[0][0].imshow(mi.util.convert_to_bitmap(image_1))
-ax[0][1].axis("off")  # Remove the axes from the image
-ax[0][1].imshow(mi.util.convert_to_bitmap(image_2))
+# ax[0][1].axis("off")  # Remove the axes from the image
+# ax[0][1].imshow(mi.util.convert_to_bitmap(image_2))
 # ax[0][1].axis("off")
 # ax[0][1].imshow(mi.util.convert_to_bitmap(image_sh))
 # ax[0][2].axis("off")
