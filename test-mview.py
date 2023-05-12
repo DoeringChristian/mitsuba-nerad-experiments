@@ -67,7 +67,7 @@ class NRFieldOrig(nn.Module):
 
         self.network = nn.Sequential(
             nn.Linear(in_size, width),
-            nn.ReLU(inplace=True),
+            nn.LeakyReLU(inplace=True),
             *hidden_layers,
             nn.Linear(width, 3),
         ).to("cuda")
@@ -503,7 +503,7 @@ class NeradIntegrator(mi.SamplingIntegrator):
 # train_losses = []
 # tqdm_iterator = tqdm(range(total_steps))
 
-field = NRFieldOrig(scene, n_hidden=8)
+field = NRFieldOrig(scene, n_hidden=3)
 integrator = NeradIntegrator(field)
 integrator.train()
 image_1 = mi.render(scene, spp=1, integrator=integrator)

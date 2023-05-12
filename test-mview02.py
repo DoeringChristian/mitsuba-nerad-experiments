@@ -57,26 +57,26 @@ class NRFieldOrig(nn.Module):
             "log2_hashmap_size": 22,
         }
         self.pos_enc = NGPEncoding(3, enc_config)
-        enc_config = {
-            "otype": "SphericalHarmonics",
-            "degree": 4,
-            "base_resolution": 16,
-            "n_levels": 8,
-            "n_features_per_level": 4,
-            "log2_hashmap_size": 22,
-        }
-        self.wi_enc = NGPEncoding(3, enc_config)
+        # enc_config = {
+        #     "otype": "SphericalHarmonics",
+        #     "degree": 4,
+        #     "base_resolution": 16,
+        #     "n_levels": 8,
+        #     "n_features_per_level": 4,
+        #     "log2_hashmap_size": 22,
+        # }
+        # self.wi_enc = NGPEncoding(3, enc_config)
 
-        in_size = 3 * 3 + self.pos_enc.n_output_dims + self.wi_enc.n_output_dims
+        in_size = 3 * 4 + self.pos_enc.n_output_dims
 
         hidden_layers = []
         for _ in range(n_hidden):
             hidden_layers.append(nn.Linear(width, width))
-            hidden_layers.append(nn.ReLU(inplace=True))
+            hidden_layers.append(nn.LeakyReLU(inplace=True))
 
         self.network = nn.Sequential(
             nn.Linear(in_size, width),
-            nn.ReLU(inplace=True),
+            nn.LeakyReLU(inplace=True),
             *hidden_layers,
             nn.Linear(width, 3),
         ).to("cuda")
@@ -98,9 +98,9 @@ class NRFieldOrig(nn.Module):
             f_d = si.bsdf().eval_diffuse_reflectance(si).torch()
 
         z_x = self.pos_enc(x)
-        z_wi = self.wi_enc(wi)
+        # z_wi = self.wi_enc(wi)
 
-        inp = torch.concat([x, z_wi, n, f_d, z_x], dim=1)
+        inp = torch.concat([x, wi, n, f_d, z_x], dim=1)
         out = self.network(inp)
         out = torch.abs(out)
         return out.to(torch.float32)
@@ -440,7 +440,7 @@ class NeradIntegrator(mi.SamplingIntegrator):
 # train_losses = []
 # tqdm_iterator = tqdm(range(total_steps))
 
-field = NRFieldOrig(scene, n_hidden=3)
+field = NRFieldOrig(scene, n_hidden=4)
 integrator = NeradIntegrator(field)
 integrator.train()
 image_1 = mi.render(scene, spp=1, integrator=integrator)
