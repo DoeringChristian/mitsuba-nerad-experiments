@@ -280,7 +280,9 @@ class NeradIntegrator(mi.SamplingIntegrator):
         # return si at the first non-specular bounce or null face
         return si, bsdf, β, null_face
 
-    def render_lhs(self, scene, si, mode: str = "drjit"):
+    def render_lhs(
+        self, scene: mi.Scene, si: mi.SurfaceInteraction3f, mode: str = "drjit"
+    ) -> mi.Color3f | torch.Tensor:
         """
         Renders the left-hand side of the rendering equation by calculating the emitter's radiance and
         the neural network output at the given surface interaction (si) position and direction (bsdf).
@@ -316,7 +318,9 @@ class NeradIntegrator(mi.SamplingIntegrator):
         elif mode == "torch":
             return Le.torch() + out * mask.torch().reshape(-1, 1)
 
-    def render_rhs(self, scene, si, sampler, mode="drjit") -> mi.Color3d | mi.TensorXf:
+    def render_rhs(
+        self, scene: mi.Scene, si: mi.SurfaceInteraction3f, sampler, mode="drjit"
+    ) -> mi.Color3d | torch.Tensor:
         with dr.suspend_grad():
             bsdf_ctx = mi.BSDFContext()
 
