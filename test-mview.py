@@ -29,7 +29,7 @@ scene = mi.load_file("./data/scenes/cornell-box/scene.xml")
 
 M = 32
 batch_size = 2**14
-total_steps = 100
+total_steps = 1000
 lr = 5e-4
 seed = 42
 
@@ -268,10 +268,7 @@ class NeradIntegrator(mi.SamplingIntegrator):
                 ) & (si.wi.z < 0)
                 active &= si.is_valid() & ~null_face
                 # active &= ~mi.has_flag(bsdf_sample.sampled_type, mi.BSDFFlags.Smooth)
-                active &= mi.has_flag(
-                    bsdf_sample.sampled_type, mi.BSDFFlags.Glossy
-                )  # | mi.has_flag(bsdf_sample.sampled_type, mi.BSDFFlags.Delta)
-                # active &= mi.has_flag(bsdf_sample.sampled_type, mi.BSDFFlags.Empty)
+                active &= mi.has_flag(bsdf_sample.sampled_type, mi.BSDFFlags.Glossy)
 
                 ray = si.spawn_ray(si.to_world(bsdf_sample.wo))
 
