@@ -29,7 +29,7 @@ scene = mi.load_file("./data/scenes/cornell-box/scene.xml")
 
 M = 32
 batch_size = 2**14
-total_steps = 1000
+total_steps = 40000
 lr = 5e-4
 seed = 42
 
