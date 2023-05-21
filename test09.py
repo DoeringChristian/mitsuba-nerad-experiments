@@ -17,16 +17,15 @@ from tqdm import tqdm
 
 scene_dict = mi.cornell_box()
 
-# del scene_dict["small-box"]
 scene_dict.pop("small-box")
 scene_dict["sphere"] = {
     "type": "sphere",
-    "to_world": mi.ScalarTransform4f.translate([0.335, -0.6, 0.38]).scale(0.3),
+    "to_world": mi.ScalarTransform4f.translate([0.335, 0.0, 0.38]).scale(0.5),
     "bsdf": {"type": "dielectric"},
 }
 
 scene: mi.Scene = mi.load_dict(scene_dict)
-scene = mi.load_file("./data/scenes/caustics/scene.xml")
+# scene = mi.load_file("./data/scenes/caustics/scene.xml")
 # scene = mi.load_file("./data/scenes/cornell-box/scene.xml")
 # scene = mi.load_file("./data/scenes/veach-ajar/scene.xml")
 
@@ -263,18 +262,19 @@ class NeradIntegrator(mi.SamplingIntegrator):
                 bsdf_sample, bsdf_weight = bsdf.sample(
                     bsdf_ctx, si, sampler.next_1d(), sampler.next_2d(), active
                 )
+
                 null_face &= ~mi.has_flag(
                     bsdf_sample.sampled_type, mi.BSDFFlags.BackSide
                 ) & (si.wi.z < 0)
                 active &= si.is_valid() & ~null_face & (depth < 6)
-                active &= ~mi.has_flag(bsdf.flags(), mi.BSDFFlags.Smooth)
+                active &= ~mi.has_flag(bsdf_sample.sampled_type, mi.BSDFFlags.Smooth)
 
                 ray = si.spawn_ray(si.to_world(bsdf_sample.wo))
 
                 si[active] = scene.ray_intersect(
                     ray,
                     ray_flags=mi.RayFlags.All,
-                    coherent=dr.eq(depth, 0),
+                    coherent=False,
                     active=active,
                 )
 
