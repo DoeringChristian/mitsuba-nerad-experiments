@@ -15,14 +15,18 @@ from mitsuba.python.ad.integrators.common import ADIntegrator, mis_weight
 
 from tqdm import tqdm
 
-scene_dict = mi.cornell_box()
-
-scene_dict["glass"] = {"type": "conductor"}
-small_box = scene_dict.pop("small-box")
-small_box["bsdf"]["id"] = "glass"
-scene_dict["small-box"] = small_box
-
-scene: mi.Scene = mi.load_dict(scene_dict)
+# scene_dict = mi.cornell_box()
+#
+# scene_dict["glass"] = {
+#     "type": "roughconductor",
+#     "alpha": 0.0001,
+#     # "roughness": 0.0,
+# }
+# small_box = scene_dict.pop("small-box")
+# small_box["bsdf"]["id"] = "glass"
+# scene_dict["small-box"] = small_box
+#
+# scene: mi.Scene = mi.load_dict(scene_dict)
 scene = mi.load_file("./data/scenes/cornell-box/scene.xml")
 # scene = mi.load_file("./data/scenes/veach-ajar/scene.xml")
 
@@ -49,8 +53,8 @@ class NRFieldOrig(nn.Module):
         self.bbox = scene.bbox()
 
         enc_config = {
-            "otype": "Grid",
-            "type": "Hash",
+            "otype": "HashGrid",
+            # "type": "Hash",
             "base_resolution": 16,
             "n_levels": 8,
             "n_features_per_level": 4,
@@ -264,7 +268,7 @@ class NeradIntegrator(mi.SamplingIntegrator):
                     bsdf_sample.sampled_type, mi.BSDFFlags.BackSide
                 ) & (si.wi.z < 0)
                 active &= si.is_valid() & ~null_face & (depth < 6)
-                active &= mi.has_flag(bsdf_sample.sampled_type, mi.BSDFFlags.Glossy)
+                active &= ~mi.has_flag(bsdf_sample.sampled_type, mi.BSDFFlags.Smooth)
 
                 ray = si.spawn_ray(si.to_world(bsdf_sample.wo))
 
