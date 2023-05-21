@@ -15,21 +15,20 @@ from mitsuba.python.ad.integrators.common import ADIntegrator, mis_weight
 
 from tqdm import tqdm
 
-# scene_dict = mi.cornell_box()
-#
-# scene_dict["glass"] = {
-#     "type": "roughconductor",
-#     "alpha": 0.0001,
-#     # "roughness": 0.0,
-# }
-# small_box = scene_dict.pop("small-box")
-# small_box["bsdf"]["id"] = "glass"
-# scene_dict["small-box"] = small_box
-#
-# scene: mi.Scene = mi.load_dict(scene_dict)
-scene = mi.load_file("./data/scenes/cornell-box/scene.xml")
-# scene = mi.load_file("./data/scenes/veach-ajar/scene.xml")
+scene_dict = mi.cornell_box()
 
+# del scene_dict["small-box"]
+scene_dict.pop("small-box")
+scene_dict["sphere"] = {
+    "type": "sphere",
+    "to_world": mi.ScalarTransform4f.translate([0.335, -0.6, 0.38]).scale(0.3),
+    "bsdf": {"type": "dielectric"},
+}
+
+scene: mi.Scene = mi.load_dict(scene_dict)
+scene = mi.load_file("./data/scenes/caustics/scene.xml")
+# scene = mi.load_file("./data/scenes/cornell-box/scene.xml")
+# scene = mi.load_file("./data/scenes/veach-ajar/scene.xml")
 
 M = 32
 batch_size = 2**14
@@ -268,7 +267,7 @@ class NeradIntegrator(mi.SamplingIntegrator):
                     bsdf_sample.sampled_type, mi.BSDFFlags.BackSide
                 ) & (si.wi.z < 0)
                 active &= si.is_valid() & ~null_face & (depth < 6)
-                active &= ~mi.has_flag(bsdf_sample.sampled_type, mi.BSDFFlags.Smooth)
+                active &= ~mi.has_flag(bsdf.flags(), mi.BSDFFlags.Smooth)
 
                 ray = si.spawn_ray(si.to_world(bsdf_sample.wo))
 
@@ -280,7 +279,7 @@ class NeradIntegrator(mi.SamplingIntegrator):
                 )
 
                 β[active] *= bsdf_weight
-                depth[active] += 1
+                depth += 1
 
         # return si at the first non-specular bounce or null face
         return si, β, null_face
@@ -416,7 +415,6 @@ class NeradIntegrator(mi.SamplingIntegrator):
 
             ray = mi.Ray3f(dr.detach(ray))
             si = scene.ray_intersect(ray, ray_flags=mi.RayFlags.All, coherent=True)
-            bsdf = si.bsdf(ray)
 
             # update si and bsdf with the first non-specular ones
             si, β, _ = self.first_non_specular_or_null_si(scene, si, sampler)
@@ -503,7 +501,7 @@ class NeradIntegrator(mi.SamplingIntegrator):
 # train_losses = []
 # tqdm_iterator = tqdm(range(total_steps))
 
-field = NRFieldOrig(scene, n_hidden=3)
+field = NRFieldOrig(scene, n_hidden=3, width=256)
 integrator = NeradIntegrator(field)
 integrator.train()
 image_orig = mi.render(scene, spp=1, integrator=integrator)
