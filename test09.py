@@ -315,7 +315,7 @@ class NeradIntegrator(mi.SamplingIntegrator):
             mask = si.is_valid() & ~null_face
 
             out = self.model(si)
-            L = Le + dr.select(mask, mi.Spectrum(out), 0)
+            # L = Le + dr.select(mask, mi.Spectrum(out), 0)
 
         if mode == "drjit":
             return Le + dr.select(mask, mi.Spectrum(out), 0)
@@ -391,14 +391,13 @@ class NeradIntegrator(mi.SamplingIntegrator):
                 & dr.eq(si.emitter(scene).eval(si), mi.Spectrum(0))
             )
 
-            Le = L
             w_nr = β * mis
-            L = Le + dr.select(active_nr, w_nr * mi.Spectrum(out), 0)
 
         if mode == "drjit":
-            return L
+            return L + dr.select(active_nr, w_nr * mi.Spectrum(out), 0)
+
         elif mode == "torch":
-            return Le.torch() + out * dr.select(active_nr, w_nr, 0).torch()
+            return L.torch() + out * dr.select(active_nr, w_nr, 0).torch()
 
     def sample(
         self,
@@ -504,7 +503,7 @@ class NeradIntegrator(mi.SamplingIntegrator):
 field = NRFieldOrig(scene, n_hidden=3, width=256)
 integrator = NeradIntegrator(field)
 integrator.train()
-image_orig = mi.render(scene, spp=1, integrator=integrator)
+image = mi.render(scene, spp=16, integrator=integrator)
 losses_orig = integrator.train_losses
 
 # field = NRFieldSh(scene)
@@ -524,7 +523,7 @@ ref_image = mi.render(scene, spp=16)
 fig, ax = plt.subplots(2, 2, figsize=(10, 10))
 fig.patch.set_visible(False)  # Hide the figure's background
 ax[0][0].axis("off")  # Remove the axes from the image
-ax[0][0].imshow(mi.util.convert_to_bitmap(image_orig))
+ax[0][0].imshow(mi.util.convert_to_bitmap(image))
 # ax[0][1].axis("off")
 # ax[0][1].imshow(mi.util.convert_to_bitmap(image_sh))
 # ax[0][2].axis("off")

@@ -24,10 +24,20 @@ fig.tight_layout()
 axs.imshow(mi.util.convert_to_bitmap(original_image))
 # plt.show()
 
-scene_dict["glass"] = {"type": "conductor"}
-small_box = scene_dict.pop("small-box")
-small_box["bsdf"]["id"] = "glass"
-scene_dict["small-box"] = small_box
+# scene_dict["glass"] = {"type": "conductor"}
+# small_box = scene_dict.pop("small-box")
+# small_box["bsdf"]["id"] = "glass"
+# scene_dict["small-box"] = small_box
+#
+# scene: mi.Scene = mi.load_dict(scene_dict)
+scene_dict = mi.cornell_box()
+
+scene_dict.pop("small-box")
+scene_dict["sphere"] = {
+    "type": "sphere",
+    "to_world": mi.ScalarTransform4f.translate([0.335, 0.0, 0.38]).scale(0.5),
+    "bsdf": {"type": "dielectric"},
+}
 
 scene: mi.Scene = mi.load_dict(scene_dict)
 # scene = mi.load_file("./data/scenes/cornell-box/scene.xml")
@@ -111,7 +121,7 @@ r_sampler = mi.load_dict({"type": "independent", "sample_count": 1})
 
 batch_size = 2**14
 M = 32
-total_steps = 1000
+total_steps = 10000
 lr = 5e-4
 seed = 42
 
