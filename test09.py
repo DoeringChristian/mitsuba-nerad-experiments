@@ -19,61 +19,63 @@ scene_dict = mi.cornell_box()
 
 scene_dict.pop("small-box")
 scene_dict.pop("large-box")
-# scene_dict["sphere"] = {
-#     "type": "sphere",
-#     "to_world": mi.ScalarTransform4f.translate([0.335, 0.0, 0.38]).scale(0.5),
-#     "bsdf": {"type": "dielectric"},
-# }
-scene_dict["ring"] = {
-    "type": "ply",
-    "filename": "./data/meshes/ring2.ply",
-    "to_world": mi.ScalarTransform4f.translate([0.0, -0.9, -0.2])
-    .rotate([1.0, 0.0, 0.0], 30.0)
-    .scale(0.5),
-    "bsdf": {"type": "conductor"},
+scene_dict["sphere"] = {
+    "type": "sphere",
+    "to_world": mi.ScalarTransform4f.translate([0.335, 0.0, 0.38]).scale(0.5),
+    "bsdf": {"type": "dielectric"},
 }
 
-scene_dict = {
-    "type": "scene",
-    "integrator": {
-        "type": "path",
-    },
-    "ring": {
+if False:
+    scene_dict["ring"] = {
         "type": "ply",
         "filename": "./data/meshes/ring2.ply",
-        "to_world": mi.ScalarTransform4f.translate([-0.1, 0.1, 0.3])
-        .rotate([1.0, 0.0, 0.0], 00.0)
-        .scale([0.4, 0.3, 0.4]),
+        "to_world": mi.ScalarTransform4f.translate([0.0, -0.9, -0.2])
+        .rotate([1.0, 0.0, 0.0], 30.0)
+        .scale(0.5),
         "bsdf": {"type": "conductor"},
-    },
-    "sensor": {
-        "type": "perspective",
-        "fov": 45.0,
-        "to_world": mi.ScalarTransform4f.look_at(
-            origin=[1, 1, 1], target=[0, 0, 0], up=[0, 1, 0]
-        ),
-    },
-    "floor": {
-        "type": "rectangle",
-        "bsdf": {
-            "type": "diffuse",
+    }
+
+    scene_dict = {
+        "type": "scene",
+        "integrator": {
+            "type": "path",
         },
-        "to_world": mi.ScalarTransform4f.rotate([1, 0, 0], -90.0),
-    },
-    "light": {
-        "type": "rectangle",
-        "to_world": mi.ScalarTransform4f.translate([0.0, 1.0, 2.0])
-        .rotate([1.0, 0.0, 0.0], 90.0 + 45.0)
-        .scale(0.2),
-        "emitter": {
-            "type": "area",
-            "radiance": {
-                "type": "rgb",
-                "value": [18.387 * 10.0, 13.9873 * 10.0, 6.75357 * 10.0],
+        "ring": {
+            "type": "ply",
+            "filename": "./data/meshes/ring2.ply",
+            "to_world": mi.ScalarTransform4f.translate([-0.1, 0.1, 0.3])
+            .rotate([1.0, 0.0, 0.0], 00.0)
+            .scale([0.4, 0.3, 0.4]),
+            "bsdf": {"type": "conductor"},
+        },
+        "sensor": {
+            "type": "perspective",
+            "fov": 45.0,
+            "to_world": mi.ScalarTransform4f.look_at(
+                origin=[1, 1, 1], target=[0, 0, 0], up=[0, 1, 0]
+            ),
+        },
+        "floor": {
+            "type": "rectangle",
+            "bsdf": {
+                "type": "diffuse",
+            },
+            "to_world": mi.ScalarTransform4f.rotate([1, 0, 0], -90.0),
+        },
+        "light": {
+            "type": "rectangle",
+            "to_world": mi.ScalarTransform4f.translate([0.0, 1.0, 2.0])
+            .rotate([1.0, 0.0, 0.0], 90.0 + 45.0)
+            .scale(0.2),
+            "emitter": {
+                "type": "area",
+                "radiance": {
+                    "type": "rgb",
+                    "value": [18.387 * 10.0, 13.9873 * 10.0, 6.75357 * 10.0],
+                },
             },
         },
-    },
-}
+    }
 
 
 scene: mi.Scene = mi.load_dict(scene_dict)
@@ -81,13 +83,13 @@ scene: mi.Scene = mi.load_dict(scene_dict)
 # scene = mi.load_file("./data/scenes/cornell-box/scene.xml")
 # scene = mi.load_file("./data/scenes/veach-ajar/scene.xml")
 
-ref = mi.render(scene, spp=128, integrator=mi.load_dict({"type": "ptracer"}))
-plt.imshow(mi.util.convert_to_bitmap(ref))
-plt.show()
+# ref = mi.render(scene, spp=128, integrator=mi.load_dict({"type": "ptracer"}))
+# plt.imshow(mi.util.convert_to_bitmap(ref))
+# plt.show()
 
 M = 32
 batch_size = 2**14
-total_steps = 1000
+total_steps = 10000
 lr = 5e-4
 seed = 42
 
