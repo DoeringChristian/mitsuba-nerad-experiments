@@ -581,7 +581,7 @@ losses_orig = integrator.train_losses
 # image_sh_2 = mi.render(scene, spp=16, integrator=integrator)
 # losses_sh_2 = integrator.train_losses
 
-ref_image = mi.render(scene, spp=16)
+ref_image = mi.render(scene, spp=1024)
 pt_image = mi.render(scene, spp=16, integrator=mi.load_dict({"type": "ptracer"}))
 
 fig, ax = plt.subplots(2, 2, figsize=(10, 10))
