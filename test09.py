@@ -18,16 +18,72 @@ from tqdm import tqdm
 scene_dict = mi.cornell_box()
 
 scene_dict.pop("small-box")
-scene_dict["sphere"] = {
-    "type": "sphere",
-    "to_world": mi.ScalarTransform4f.translate([0.335, 0.0, 0.38]).scale(0.5),
-    "bsdf": {"type": "dielectric"},
+scene_dict.pop("large-box")
+# scene_dict["sphere"] = {
+#     "type": "sphere",
+#     "to_world": mi.ScalarTransform4f.translate([0.335, 0.0, 0.38]).scale(0.5),
+#     "bsdf": {"type": "dielectric"},
+# }
+scene_dict["ring"] = {
+    "type": "ply",
+    "filename": "./data/meshes/ring2.ply",
+    "to_world": mi.ScalarTransform4f.translate([0.0, -0.9, -0.2])
+    .rotate([1.0, 0.0, 0.0], 30.0)
+    .scale(0.5),
+    "bsdf": {"type": "conductor"},
 }
+
+scene_dict = {
+    "type": "scene",
+    "integrator": {
+        "type": "path",
+    },
+    "ring": {
+        "type": "ply",
+        "filename": "./data/meshes/ring2.ply",
+        "to_world": mi.ScalarTransform4f.translate([-0.1, 0.1, 0.3])
+        .rotate([1.0, 0.0, 0.0], 00.0)
+        .scale([0.4, 0.3, 0.4]),
+        "bsdf": {"type": "conductor"},
+    },
+    "sensor": {
+        "type": "perspective",
+        "fov": 45.0,
+        "to_world": mi.ScalarTransform4f.look_at(
+            origin=[1, 1, 1], target=[0, 0, 0], up=[0, 1, 0]
+        ),
+    },
+    "floor": {
+        "type": "rectangle",
+        "bsdf": {
+            "type": "diffuse",
+        },
+        "to_world": mi.ScalarTransform4f.rotate([1, 0, 0], -90.0),
+    },
+    "light": {
+        "type": "rectangle",
+        "to_world": mi.ScalarTransform4f.translate([0.0, 1.0, 2.0])
+        .rotate([1.0, 0.0, 0.0], 90.0 + 45.0)
+        .scale(0.2),
+        "emitter": {
+            "type": "area",
+            "radiance": {
+                "type": "rgb",
+                "value": [18.387 * 10.0, 13.9873 * 10.0, 6.75357 * 10.0],
+            },
+        },
+    },
+}
+
 
 scene: mi.Scene = mi.load_dict(scene_dict)
 # scene = mi.load_file("./data/scenes/caustics/scene.xml")
 # scene = mi.load_file("./data/scenes/cornell-box/scene.xml")
 # scene = mi.load_file("./data/scenes/veach-ajar/scene.xml")
+
+ref = mi.render(scene, spp=128, integrator=mi.load_dict({"type": "ptracer"}))
+plt.imshow(mi.util.convert_to_bitmap(ref))
+plt.show()
 
 M = 32
 batch_size = 2**14
@@ -233,6 +289,7 @@ class NeradIntegrator(mi.SamplingIntegrator):
                 - β (mi.Spectrum): The product of the weights of all previous BSDFs.
                 - null_face (bool): A boolean mask indicating whether the surface is a null face or not.
         """
+        max_iterations = 6
         # Instead of `bsdf.flags()`, based on `bsdf_sample.sampled_type`.
         with dr.suspend_grad():
             bsdf_ctx = mi.BSDFContext()
@@ -250,7 +307,7 @@ class NeradIntegrator(mi.SamplingIntegrator):
                 name="first_non_specular_or_null_si",
                 state=lambda: (sampler, depth, β, active, null_face, si),
             )
-            loop.set_max_iterations(6)
+            loop.set_max_iterations(max_iterations)
 
             while loop(active):
                 # for i in range(6):
@@ -266,7 +323,7 @@ class NeradIntegrator(mi.SamplingIntegrator):
                 null_face &= ~mi.has_flag(
                     bsdf_sample.sampled_type, mi.BSDFFlags.BackSide
                 ) & (si.wi.z < 0)
-                active &= si.is_valid() & ~null_face & (depth < 6)
+                active &= si.is_valid() & ~null_face & (depth < max_iterations)
                 active &= ~mi.has_flag(bsdf_sample.sampled_type, mi.BSDFFlags.Smooth)
 
                 ray = si.spawn_ray(si.to_world(bsdf_sample.wo))
@@ -519,6 +576,7 @@ losses_orig = integrator.train_losses
 # losses_sh_2 = integrator.train_losses
 
 ref_image = mi.render(scene, spp=16)
+pt_image = mi.render(scene, spp=16, integrator=mi.load_dict({"type": "ptracer"}))
 
 fig, ax = plt.subplots(2, 2, figsize=(10, 10))
 fig.patch.set_visible(False)  # Hide the figure's background
@@ -530,6 +588,8 @@ ax[0][0].imshow(mi.util.convert_to_bitmap(image))
 # ax[0][2].imshow(mi.util.convert_to_bitmap(image_sh_2))
 ax[1][0].axis("off")
 ax[1][0].imshow(mi.util.convert_to_bitmap(ref_image))
+ax[0][1].axis("off")
+ax[0][1].imshow(mi.util.convert_to_bitmap(pt_image))
 ax[1][1].plot(losses_orig, color="red")
 # ax[1][1].plot(losses_sh, color="green")
 # ax[1][1].plot(losses_sh_2, color="yellow")
