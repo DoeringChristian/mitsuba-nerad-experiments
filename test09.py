@@ -89,7 +89,7 @@ scene: mi.Scene = mi.load_dict(scene_dict)
 
 M = 32
 batch_size = 2**14
-total_steps = 10000
+total_steps = 1000
 lr = 5e-4
 seed = 42
 
@@ -379,7 +379,8 @@ class NeradIntegrator(mi.SamplingIntegrator):
         if mode == "drjit":
             return Le + dr.select(mask, mi.Spectrum(out), 0)
         elif mode == "torch":
-            return Le.torch() + out * mask.torch().reshape(-1, 1)
+            # return Le.torch() + out * mask.torch().reshape(-1, 1)
+            return out * mask.torch().reshape(-1, 1)
 
     def render_rhs(
         self, scene: mi.Scene, si: mi.SurfaceInteraction3f, sampler, mode="drjit"
@@ -395,7 +396,7 @@ class NeradIntegrator(mi.SamplingIntegrator):
             prev_bsdf_pdf = mi.Float(1.0)
             prev_bsdf_delta = mi.Bool(True)
 
-            Le = β * si.emitter(scene).eval(si)
+            Le1 = β * si.emitter(scene).eval(si)
 
             bsdf = si.bsdf()
 
@@ -411,7 +412,7 @@ class NeradIntegrator(mi.SamplingIntegrator):
             wo = si.to_local(ds.d)
             bsdf_value_em, bsdf_pdf_em = bsdf.eval_pdf(bsdf_ctx, si, wo, active_em)
             mis_em = dr.select(ds.delta, 1, mis_weight(ds.pdf, bsdf_pdf_em))
-            Lr_dir = β * mis_em * bsdf_value_em * em_weight
+            L_em = β * mis_em * bsdf_value_em * em_weight
 
             # bsdf sampling
             bsdf_sample, bsdf_weight = bsdf.sample(
@@ -419,7 +420,7 @@ class NeradIntegrator(mi.SamplingIntegrator):
             )
 
             # update
-            L = L + Le + Lr_dir
+            # L = L + Le + Lr_dir
             ray = si.spawn_ray(si.to_world(bsdf_sample.wo))
             η *= bsdf_sample.eta
             β *= bsdf_weight
@@ -436,12 +437,15 @@ class NeradIntegrator(mi.SamplingIntegrator):
 
             ds = mi.DirectionSample3f(scene, si=si, ref=prev_si)
 
-            mis = mis_weight(
+            mis_bsdf = mis_weight(
                 prev_bsdf_pdf,
                 scene.pdf_emitter_direction(prev_si, ds, ~prev_bsdf_delta),
             )
 
-            L += β * mis * si.emitter(scene).eval(si)
+            # L += β * mis * si.emitter(scene).eval(si)
+            L_dir = β * mis_bsdf * si.emitter(scene).eval(si)
+
+            L = L_dir + L_em
 
             out = self.model(si)
             active_nr = (
@@ -450,7 +454,7 @@ class NeradIntegrator(mi.SamplingIntegrator):
                 & dr.eq(si.emitter(scene).eval(si), mi.Spectrum(0))
             )
 
-            w_nr = β * mis
+            w_nr = β * mis_bsdf
 
         if mode == "drjit":
             return L + dr.select(active_nr, w_nr * mi.Spectrum(out), 0)
