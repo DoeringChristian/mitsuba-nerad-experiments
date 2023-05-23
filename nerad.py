@@ -13,36 +13,11 @@ from mitsuba.python.ad.integrators.common import ADIntegrator, mis_weight
 
 from tqdm import tqdm
 
-scene_dict = mi.cornell_box()
-
-scene_dict.pop("small-box")
-scene_dict.pop("large-box")
-scene_dict["sphere"] = {
-    "type": "sphere",
-    "to_world": mi.ScalarTransform4f.translate([0.335, 0.0, 0.38]).scale(0.5),
-    "bsdf": {"type": "dielectric"},
-}
-
-scene: mi.Scene = mi.load_dict(scene_dict)
-# scene = mi.load_file("./data/scenes/caustics/scene.xml")
-# scene = mi.load_file("./data/scenes/cornell-box/scene.xml")
-# scene = mi.load_file("./data/scenes/veach-ajar/scene.xml")
-
-# ref = mi.render(scene, spp=128, integrator=mi.load_dict({"type": "ptracer"}))
-# plt.imshow(mi.util.convert_to_bitmap(ref))
-# plt.show()
-
-M = 32
-batch_size = 2**14
-total_steps = 1000
-lr = 5e-4
-seed = 42
-
 
 from tinycudann import Encoding as NGPEncoding
 
 
-class NRFieldOrig(nn.Module):
+class NRField(nn.Module):
     def __init__(self, scene: mi.Scene, width=256, n_hidden=8) -> None:
         """Initialize an instance of NRField.
 
@@ -101,77 +76,6 @@ class NRFieldOrig(nn.Module):
         return out.to(torch.float32)
 
 
-class NRFieldSh(nn.Module):
-    @staticmethod
-    def sh_coeffs(n):
-        return (n + 1) ** 2
-
-    def __init__(self, scene: mi.Scene, width=256, n_hidden=8, wi_order=5) -> None:
-        """Initialize an instance of NRField.
-
-        Args:
-            bb_min (mi.ScalarBoundingBox3f): minimum point of the bounding box
-            bb_max (mi.ScalarBoundingBox3f): maximum point of the bounding box
-        """
-        super().__init__()
-        self.bbox = scene.bbox()
-
-        enc_config = {
-            "base_resolution": 16,
-            "n_levels": 8,
-            "n_features_per_level": 4,
-            "log2_hashmap_size": 22,
-        }
-        self.pos_enc = NGPEncoding(3, enc_config)
-
-        in_size = 3 * 3 + self.pos_enc.n_output_dims + NRFieldSh.sh_coeffs(wi_order) - 1
-
-        hidden_layers = []
-        for _ in range(n_hidden):
-            hidden_layers.append(nn.Linear(width, width))
-            hidden_layers.append(nn.ReLU(inplace=True))
-
-        self.network = nn.Sequential(
-            nn.Linear(in_size, width),
-            nn.ReLU(inplace=True),
-            *hidden_layers,
-            nn.Linear(width, 3),
-        ).to("cuda")
-
-        # self.rgb_net = torch.nn.Sequential(*layers)
-        self.wi_order = wi_order
-
-    def forward(self, si: mi.SurfaceInteraction3f):
-        """Forward pass for NRField.
-
-        Args:
-            si (mitsuba.SurfaceInteraction3f): surface interaction
-            bsdf (mitsuba.BSDF): bidirectional scattering distribution function
-
-        Returns:
-            torch.Tensor
-        """
-
-        with dr.suspend_grad():
-            x = ((si.p - self.bbox.min) / (self.bbox.max - self.bbox.min)).torch()
-            wi = si.to_world(si.wi)
-            sh_wi = dr.sh_eval(wi, self.wi_order)
-            sh_wi = [sh.torch()[:, None] for sh in sh_wi]
-            sh_wi = torch.concat(sh_wi[1:], dim=1)
-
-            # wi = si.to_world(si.wi).torch()
-            n = si.sh_frame.n.torch()
-            f_d = si.bsdf().eval_diffuse_reflectance(si).torch()
-
-        z_x = self.pos_enc(x)
-
-        inp = [x, sh_wi, n, f_d, z_x]
-        inp = torch.concat(inp, dim=1)
-        out = self.network(inp)
-        out = torch.abs(out)
-        return out.to(torch.float32)
-
-
 class NeradIntegrator(mi.SamplingIntegrator):
     def __init__(self, model) -> None:
         super().__init__(mi.Properties())
@@ -179,6 +83,12 @@ class NeradIntegrator(mi.SamplingIntegrator):
 
         self.l_sampler = mi.load_dict({"type": "independent", "sample_count": 1})
         self.r_sampler = mi.load_dict({"type": "independent", "sample_count": 1})
+
+        self.M = 32
+        self.batch_size = 2**14
+        self.total_steps = 1000
+        self.lr = 5e-4
+        self.seed = 42
 
     def sample_si(
         self,
@@ -449,9 +359,9 @@ class NeradIntegrator(mi.SamplingIntegrator):
 
         shape_sampler = mi.DiscreteDistribution(m_area)
 
-        optimizer = torch.optim.Adam(field.parameters(), lr=lr)
+        optimizer = torch.optim.Adam(field.parameters(), lr=self.lr)
         train_losses = []
-        tqdm_iterator = tqdm(range(total_steps))
+        tqdm_iterator = tqdm(range(self.total_steps))
 
         self.model.train()
         for step in tqdm_iterator:
@@ -460,8 +370,8 @@ class NeradIntegrator(mi.SamplingIntegrator):
             # detach the computation graph of samplers to avoid lengthy graph of dr.jit
             r_sampler = self.r_sampler.clone()
             l_sampler = self.l_sampler.clone()
-            r_sampler.seed(step, batch_size * M // 2)
-            l_sampler.seed(step, batch_size)
+            r_sampler.seed(step, self.batch_size * self.M // 2)
+            l_sampler.seed(step, self.batch_size)
 
             si_lhs = self.sample_si(
                 scene,
@@ -472,8 +382,8 @@ class NeradIntegrator(mi.SamplingIntegrator):
             )
 
             # copy `si_lhs` M//2 times for RHS evaluation
-            indices = dr.arange(mi.UInt, 0, batch_size)
-            indices = dr.repeat(indices, M // 2)
+            indices = dr.arange(mi.UInt, 0, self.batch_size)
+            indices = dr.repeat(indices, self.M // 2)
             si_rhs = dr.gather(type(si_lhs), si_lhs, indices)
             # bsdf_rhs = dr.gather(type(bsdf_lhs), bsdf_lhs, indices)
 
@@ -487,7 +397,7 @@ class NeradIntegrator(mi.SamplingIntegrator):
 
             # lhs = Le_lhs.torch() + out_lhs * mask_lhs.torch().reshape(-1, 1)
             # rhs = Le_rhs.torch() + out_rhs * weight_rhs
-            rhs = rhs.reshape(batch_size, M // 2, 3).mean(dim=1)
+            rhs = rhs.reshape(self.batch_size, self.M // 2, 3).mean(dim=1)
 
             norm = 1
             # in our experiment, normalization makes rendering biased (dimmer)
@@ -507,42 +417,37 @@ class NeradIntegrator(mi.SamplingIntegrator):
 # train_losses = []
 # tqdm_iterator = tqdm(range(total_steps))
 
-field = NRFieldOrig(scene, n_hidden=3, width=256)
-integrator = NeradIntegrator(field)
-integrator.train()
-image = mi.render(scene, spp=16, integrator=integrator)
-losses_orig = integrator.train_losses
+if __name__ == "__main__":
+    scene_dict = mi.cornell_box()
 
-# field = NRFieldSh(scene)
-# integrator = NeradIntegrator(field)
-# integrator.train()
-# image_sh = mi.render(scene, spp=16, integrator=integrator)
-# losses_sh = integrator.train_losses
+    scene_dict.pop("small-box")
+    scene_dict.pop("large-box")
+    scene_dict["sphere"] = {
+        "type": "sphere",
+        "to_world": mi.ScalarTransform4f.translate([0.335, 0.0, 0.38]).scale(0.5),
+        "bsdf": {"type": "dielectric"},
+    }
 
-# field = NRFieldSh(scene, wi_order=2)
-# integrator = NeradIntegrator(field)
-# integrator.train()
-# image_sh_2 = mi.render(scene, spp=16, integrator=integrator)
-# losses_sh_2 = integrator.train_losses
+    scene: mi.Scene = mi.load_dict(scene_dict)
 
-ref_image = mi.render(scene, spp=1024)
-pt_image = mi.render(scene, spp=16, integrator=mi.load_dict({"type": "ptracer"}))
+    field = NRField(scene, n_hidden=3, width=256)
+    integrator = NeradIntegrator(field)
+    integrator.train()
+    image = mi.render(scene, spp=16, integrator=integrator)
+    losses_orig = integrator.train_losses
 
-fig, ax = plt.subplots(2, 2, figsize=(10, 10))
-fig.patch.set_visible(False)  # Hide the figure's background
-ax[0][0].axis("off")  # Remove the axes from the image
-ax[0][0].imshow(mi.util.convert_to_bitmap(image))
-# ax[0][1].axis("off")
-# ax[0][1].imshow(mi.util.convert_to_bitmap(image_sh))
-# ax[0][2].axis("off")
-# ax[0][2].imshow(mi.util.convert_to_bitmap(image_sh_2))
-ax[1][0].axis("off")
-ax[1][0].imshow(mi.util.convert_to_bitmap(ref_image))
-ax[0][1].axis("off")
-ax[0][1].imshow(mi.util.convert_to_bitmap(pt_image))
-ax[1][1].plot(losses_orig, color="red")
-# ax[1][1].plot(losses_sh, color="green")
-# ax[1][1].plot(losses_sh_2, color="yellow")
-fig.tight_layout()  # Remove any extra white spaces around the image
+    ref_image = mi.render(scene, spp=1024)
+    pt_image = mi.render(scene, spp=16, integrator=mi.load_dict({"type": "ptracer"}))
 
-plt.show()
+    fig, ax = plt.subplots(2, 2, figsize=(10, 10))
+    fig.patch.set_visible(False)  # Hide the figure's background
+    ax[0][0].axis("off")  # Remove the axes from the image
+    ax[0][0].imshow(mi.util.convert_to_bitmap(image))
+    ax[1][0].axis("off")
+    ax[1][0].imshow(mi.util.convert_to_bitmap(ref_image))
+    ax[0][1].axis("off")
+    ax[0][1].imshow(mi.util.convert_to_bitmap(pt_image))
+    ax[1][1].plot(losses_orig, color="red")
+    fig.tight_layout()  # Remove any extra white spaces around the image
+
+    plt.show()
