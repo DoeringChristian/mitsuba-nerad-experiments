@@ -432,15 +432,15 @@ class NeradIntegrator(mi.SamplingIntegrator):
             si = scene.ray_intersect(ray, ray_flags=mi.RayFlags.All, coherent=True)
             bsdf = si.bsdf(ray)
 
-            si, β2, null_face = self.first_non_specular_or_null_si(scene, si, sampler)
-            β *= β2
-
             ds = mi.DirectionSample3f(scene, si=si, ref=prev_si)
 
             mis_bsdf = mis_weight(
                 prev_bsdf_pdf,
                 scene.pdf_emitter_direction(prev_si, ds, ~prev_bsdf_delta),
             )
+
+            si, β2, null_face = self.first_non_specular_or_null_si(scene, si, sampler)
+            β *= β2
 
             # L += β * mis * si.emitter(scene).eval(si)
             L_dir = β * mis_bsdf * si.emitter(scene).eval(si)

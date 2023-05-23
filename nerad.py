@@ -1,7 +1,5 @@
-from typing import Union
 import drjit as dr
 import mitsuba as mi
-import mitsuba
 
 mi.set_variant("cuda_ad_rgb")
 
@@ -17,15 +15,75 @@ from tqdm import tqdm
 
 scene_dict = mi.cornell_box()
 
-scene_dict["glass"] = {"type": "conductor"}
-small_box = scene_dict.pop("small-box")
-small_box["bsdf"]["id"] = "glass"
-scene_dict["small-box"] = small_box
+scene_dict.pop("small-box")
+scene_dict.pop("large-box")
+scene_dict["sphere"] = {
+    "type": "sphere",
+    "to_world": mi.ScalarTransform4f.translate([0.335, 0.0, 0.38]).scale(0.5),
+    "bsdf": {"type": "dielectric"},
+}
+
+if False:
+    scene_dict["ring"] = {
+        "type": "ply",
+        "filename": "./data/meshes/ring2.ply",
+        "to_world": mi.ScalarTransform4f.translate([0.0, -0.9, -0.2])
+        .rotate([1.0, 0.0, 0.0], 30.0)
+        .scale(0.5),
+        "bsdf": {"type": "conductor"},
+    }
+
+    scene_dict = {
+        "type": "scene",
+        "integrator": {
+            "type": "path",
+        },
+        "ring": {
+            "type": "ply",
+            "filename": "./data/meshes/ring2.ply",
+            "to_world": mi.ScalarTransform4f.translate([-0.1, 0.1, 0.3])
+            .rotate([1.0, 0.0, 0.0], 00.0)
+            .scale([0.4, 0.3, 0.4]),
+            "bsdf": {"type": "conductor"},
+        },
+        "sensor": {
+            "type": "perspective",
+            "fov": 45.0,
+            "to_world": mi.ScalarTransform4f.look_at(
+                origin=[1, 1, 1], target=[0, 0, 0], up=[0, 1, 0]
+            ),
+        },
+        "floor": {
+            "type": "rectangle",
+            "bsdf": {
+                "type": "diffuse",
+            },
+            "to_world": mi.ScalarTransform4f.rotate([1, 0, 0], -90.0),
+        },
+        "light": {
+            "type": "rectangle",
+            "to_world": mi.ScalarTransform4f.translate([0.0, 1.0, 2.0])
+            .rotate([1.0, 0.0, 0.0], 90.0 + 45.0)
+            .scale(0.2),
+            "emitter": {
+                "type": "area",
+                "radiance": {
+                    "type": "rgb",
+                    "value": [18.387 * 10.0, 13.9873 * 10.0, 6.75357 * 10.0],
+                },
+            },
+        },
+    }
+
 
 scene: mi.Scene = mi.load_dict(scene_dict)
-scene = mi.load_file("./data/scenes/cornell-box/scene.xml")
+# scene = mi.load_file("./data/scenes/caustics/scene.xml")
+# scene = mi.load_file("./data/scenes/cornell-box/scene.xml")
 # scene = mi.load_file("./data/scenes/veach-ajar/scene.xml")
 
+# ref = mi.render(scene, spp=128, integrator=mi.load_dict({"type": "ptracer"}))
+# plt.imshow(mi.util.convert_to_bitmap(ref))
+# plt.show()
 
 M = 32
 batch_size = 2**14
@@ -49,8 +107,8 @@ class NRFieldOrig(nn.Module):
         self.bbox = scene.bbox()
 
         enc_config = {
-            "otype": "Grid",
-            "type": "Hash",
+            "otype": "HashGrid",
+            # "type": "Hash",
             "base_resolution": 16,
             "n_levels": 8,
             "n_features_per_level": 4,
@@ -231,6 +289,7 @@ class NeradIntegrator(mi.SamplingIntegrator):
                 - β (mi.Spectrum): The product of the weights of all previous BSDFs.
                 - null_face (bool): A boolean mask indicating whether the surface is a null face or not.
         """
+        max_iterations = 6
         # Instead of `bsdf.flags()`, based on `bsdf_sample.sampled_type`.
         with dr.suspend_grad():
             bsdf_ctx = mi.BSDFContext()
@@ -248,7 +307,7 @@ class NeradIntegrator(mi.SamplingIntegrator):
                 name="first_non_specular_or_null_si",
                 state=lambda: (sampler, depth, β, active, null_face, si),
             )
-            loop.set_max_iterations(6)
+            loop.set_max_iterations(max_iterations)
 
             while loop(active):
                 # for i in range(6):
@@ -260,23 +319,24 @@ class NeradIntegrator(mi.SamplingIntegrator):
                 bsdf_sample, bsdf_weight = bsdf.sample(
                     bsdf_ctx, si, sampler.next_1d(), sampler.next_2d(), active
                 )
+
                 null_face &= ~mi.has_flag(
                     bsdf_sample.sampled_type, mi.BSDFFlags.BackSide
                 ) & (si.wi.z < 0)
-                active &= si.is_valid() & ~null_face & (depth < 6)
-                active &= mi.has_flag(bsdf_sample.sampled_type, mi.BSDFFlags.Glossy)
+                active &= si.is_valid() & ~null_face & (depth < max_iterations)
+                active &= ~mi.has_flag(bsdf_sample.sampled_type, mi.BSDFFlags.Smooth)
 
                 ray = si.spawn_ray(si.to_world(bsdf_sample.wo))
 
                 si[active] = scene.ray_intersect(
                     ray,
                     ray_flags=mi.RayFlags.All,
-                    coherent=dr.eq(depth, 0),
+                    coherent=False,
                     active=active,
                 )
 
                 β[active] *= bsdf_weight
-                depth[active] += 1
+                depth += 1
 
         # return si at the first non-specular bounce or null face
         return si, β, null_face
@@ -312,12 +372,12 @@ class NeradIntegrator(mi.SamplingIntegrator):
             mask = si.is_valid() & ~null_face
 
             out = self.model(si)
-            L = Le + dr.select(mask, mi.Spectrum(out), 0)
 
         if mode == "drjit":
             return Le + dr.select(mask, mi.Spectrum(out), 0)
         elif mode == "torch":
-            return Le.torch() + out * mask.torch().reshape(-1, 1)
+            # return Le.torch() + out * mask.torch().reshape(-1, 1)
+            return out * mask.torch().reshape(-1, 1)
 
     def render_rhs(
         self, scene: mi.Scene, si: mi.SurfaceInteraction3f, sampler, mode="drjit"
@@ -333,7 +393,7 @@ class NeradIntegrator(mi.SamplingIntegrator):
             prev_bsdf_pdf = mi.Float(1.0)
             prev_bsdf_delta = mi.Bool(True)
 
-            Le = β * si.emitter(scene).eval(si)
+            Le1 = β * si.emitter(scene).eval(si)
 
             bsdf = si.bsdf()
 
@@ -357,7 +417,7 @@ class NeradIntegrator(mi.SamplingIntegrator):
             )
 
             # update
-            L = L + Le + Lr_dir
+            # L = L + Le + Lr_dir
             ray = si.spawn_ray(si.to_world(bsdf_sample.wo))
             η *= bsdf_sample.eta
             β *= bsdf_weight
@@ -369,17 +429,20 @@ class NeradIntegrator(mi.SamplingIntegrator):
             si = scene.ray_intersect(ray, ray_flags=mi.RayFlags.All, coherent=True)
             bsdf = si.bsdf(ray)
 
-            si, β2, null_face = self.first_non_specular_or_null_si(scene, si, sampler)
-            β *= β2
-
             ds = mi.DirectionSample3f(scene, si=si, ref=prev_si)
 
-            mis = mis_weight(
+            mis_bsdf = mis_weight(
                 prev_bsdf_pdf,
                 scene.pdf_emitter_direction(prev_si, ds, ~prev_bsdf_delta),
             )
 
-            L += β * mis * si.emitter(scene).eval(si)
+            si, β2, null_face = self.first_non_specular_or_null_si(scene, si, sampler)
+            β *= β2
+
+            # L += β * mis * si.emitter(scene).eval(si)
+            # L_dir = β * mis_bsdf * si.emitter(scene).eval(si)
+
+            L = β * mis_bsdf * si.emitter(scene).eval(si) + Lr_dir
 
             out = self.model(si)
             active_nr = (
@@ -388,14 +451,13 @@ class NeradIntegrator(mi.SamplingIntegrator):
                 & dr.eq(si.emitter(scene).eval(si), mi.Spectrum(0))
             )
 
-            Le = L
-            w_nr = β * mis
-            L = Le + dr.select(active_nr, w_nr * mi.Spectrum(out), 0)
+            w_nr = β * mis_bsdf
 
         if mode == "drjit":
-            return L
+            return L + dr.select(active_nr, w_nr * mi.Spectrum(out), 0)
+
         elif mode == "torch":
-            return Le.torch() + out * dr.select(active_nr, w_nr, 0).torch()
+            return L.torch() + out * dr.select(active_nr, w_nr, 0).torch()
 
     def sample(
         self,
@@ -412,7 +474,6 @@ class NeradIntegrator(mi.SamplingIntegrator):
 
             ray = mi.Ray3f(dr.detach(ray))
             si = scene.ray_intersect(ray, ray_flags=mi.RayFlags.All, coherent=True)
-            bsdf = si.bsdf(ray)
 
             # update si and bsdf with the first non-specular ones
             si, β, _ = self.first_non_specular_or_null_si(scene, si, sampler)
@@ -499,10 +560,10 @@ class NeradIntegrator(mi.SamplingIntegrator):
 # train_losses = []
 # tqdm_iterator = tqdm(range(total_steps))
 
-field = NRFieldOrig(scene, n_hidden=3)
+field = NRFieldOrig(scene, n_hidden=3, width=256)
 integrator = NeradIntegrator(field)
 integrator.train()
-image_orig = mi.render(scene, spp=1, integrator=integrator)
+image = mi.render(scene, spp=16, integrator=integrator)
 losses_orig = integrator.train_losses
 
 # field = NRFieldSh(scene)
@@ -517,18 +578,21 @@ losses_orig = integrator.train_losses
 # image_sh_2 = mi.render(scene, spp=16, integrator=integrator)
 # losses_sh_2 = integrator.train_losses
 
-ref_image = mi.render(scene, spp=16)
+ref_image = mi.render(scene, spp=1024)
+pt_image = mi.render(scene, spp=16, integrator=mi.load_dict({"type": "ptracer"}))
 
 fig, ax = plt.subplots(2, 2, figsize=(10, 10))
 fig.patch.set_visible(False)  # Hide the figure's background
 ax[0][0].axis("off")  # Remove the axes from the image
-ax[0][0].imshow(mi.util.convert_to_bitmap(image_orig))
+ax[0][0].imshow(mi.util.convert_to_bitmap(image))
 # ax[0][1].axis("off")
 # ax[0][1].imshow(mi.util.convert_to_bitmap(image_sh))
 # ax[0][2].axis("off")
 # ax[0][2].imshow(mi.util.convert_to_bitmap(image_sh_2))
 ax[1][0].axis("off")
 ax[1][0].imshow(mi.util.convert_to_bitmap(ref_image))
+ax[0][1].axis("off")
+ax[0][1].imshow(mi.util.convert_to_bitmap(pt_image))
 ax[1][1].plot(losses_orig, color="red")
 # ax[1][1].plot(losses_sh, color="green")
 # ax[1][1].plot(losses_sh_2, color="yellow")
