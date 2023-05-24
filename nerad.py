@@ -153,9 +153,6 @@ class NeradIntegrator(mi.SamplingIntegrator):
 
             depth = mi.UInt32(0)
             β = mi.Spectrum(1)
-            # prev_si = dr.zeros(mi.SurfaceInteraction3f)
-            # prev_bsdf_pdf = mi.Float(1.0)
-            # prev_bsdf_delta = mi.Bool(True)
 
             null_face = mi.Bool(True)
             active = mi.Bool(True)
@@ -167,7 +164,6 @@ class NeradIntegrator(mi.SamplingIntegrator):
             loop.set_max_iterations(max_iterations)
 
             while loop(active):
-                # for i in range(6):
                 # loop invariant: si is located at non-null and Delta surface
                 # if si is located at null or Smooth surface, end loop
 
@@ -234,6 +230,7 @@ class NeradIntegrator(mi.SamplingIntegrator):
             return Le + dr.select(mask, mi.Spectrum(out), 0)
         elif mode == "torch":
             # return Le.torch() + out * mask.torch().reshape(-1, 1)
+            # In torch mode returns only the network output
             return out * mask.torch().reshape(-1, 1)
 
     def render_rhs(
@@ -250,6 +247,9 @@ class NeradIntegrator(mi.SamplingIntegrator):
             prev_bsdf_pdf = mi.Float(1.0)
             prev_bsdf_delta = mi.Bool(True)
 
+            # Do not use Le1 only render Transmittance
+            # L = E + T = E(x, ω_o) + T(E(x', -ω_i) + N(x', -ω_i))
+            # L(x, ω_o) = E(x, ω_o) + ∫ L(x'(x, ω_o), ω_i) f(x, ω_o, ω_i) dω_i^⊥ = E(x, ω_o) + N(x', ω_o)
             Le1 = β * si.emitter(scene).eval(si)
 
             bsdf = si.bsdf()
@@ -436,7 +436,7 @@ if __name__ == "__main__":
     image = mi.render(scene, spp=16, integrator=integrator)
     losses_orig = integrator.train_losses
 
-    ref_image = mi.render(scene, spp=1024)
+    ref_image = mi.render(scene, spp=2048)
     pt_image = mi.render(scene, spp=16, integrator=mi.load_dict({"type": "ptracer"}))
 
     fig, ax = plt.subplots(2, 2, figsize=(10, 10))
