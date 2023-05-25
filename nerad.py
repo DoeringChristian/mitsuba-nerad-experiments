@@ -416,9 +416,18 @@ if __name__ == "__main__":
 
     scene_dict.pop("small-box")
     scene_dict.pop("large-box")
-    scene_dict["sphere"] = {
-        "type": "sphere",
-        "to_world": mi.ScalarTransform4f.translate([0.335, 0.0, 0.38]).scale(0.5),
+    # scene_dict["sphere"] = {
+    #     "type": "sphere",
+    #     "to_world": mi.ScalarTransform4f.translate([0.335, 0.0, -0.38]).scale(0.5),
+    #     "bsdf": {"type": "plastic"},
+    # }
+
+    scene_dict["suzanne"] = {
+        "type": "ply",
+        "filename": "./data/meshes/suzanne.ply",
+        "to_world": mi.ScalarTransform4f.translate([0.335, 0.0, 0.0])
+        .rotate([1.0, 0.0, 0.0], 90.0)
+        .scale(0.5),
         "bsdf": {"type": "dielectric"},
     }
 
