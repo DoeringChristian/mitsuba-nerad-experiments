@@ -1,0 +1,137 @@
+<scene version="2.1.0">
+
+<!-- Defaults, these can be set via the command line: -Darg=value -->
+
+	<default name="spp" value="4096"/>
+	<default name="resx" value="1920"/>
+	<default name="resy" value="1080"/>
+
+<!-- Camera and Rendering Parameters -->
+
+	<integrator type="path">
+		<integer name="max_depth" value="12"/>
+	</integrator>
+	<sensor type="perspective">
+		<string name="fov_axis" value="x"/>
+		<float name="fov" value="41.112090"/>
+		<float name="principal_point_offset_x" value="0.000000"/>
+		<float name="principal_point_offset_y" value="-0.000000"/>
+		<float name="near_clip" value="0.100000"/>
+		<float name="far_clip" value="1000.000000"/>
+		<transform name="to_world">
+			<rotate x="1" angle="-178.36731658975648"/>
+			<rotate y="1" angle="16.256729611485987"/>
+			<rotate z="1" angle="-179.8646716407417"/>
+			<translate value="-2.262922 1.052739 5.468706"/>
+		</transform>
+		<sampler type="independent">
+			<integer name="sample_count" value="$spp"/>
+		</sampler>
+		<film type="hdrfilm">
+			<integer name="width" value="$resx"/>
+			<integer name="height" value="$resy"/>
+		</film>
+	</sensor>
+
+<!-- Materials -->
+
+	<bsdf type="twosided" id="mat-Wall">
+		<bsdf type="diffuse">
+			<rgb value="1.000000 1.000000 1.000000" name="reflectance"/>
+		</bsdf>
+	</bsdf>
+	<bsdf type="twosided" id="mat-Wood">
+		<bsdf type="diffuse">
+			<rgb value="0.198234 0.198234 0.198234" name="reflectance"/>
+		</bsdf>
+	</bsdf>
+	<bsdf type="twosided" id="mat-Metal">
+		<bsdf type="conductor">
+			<rgb value="0.800000 0.800000 0.800000" name="specular_reflectance"/>
+		</bsdf>
+	</bsdf>
+	<bsdf type="diffuse" id="mat-Specular">
+		<rgb value="1.000000 0.000000 0.300000" name="reflectance"/>
+	</bsdf>
+	<bsdf type="dielectric" id="mat-Glass">
+		<float name="int_ior" value="1.450000"/>
+		<rgb value="1.000000 1.000000 1.000000" name="specular_transmittance"/>
+	</bsdf>
+	<bsdf type="diffuse" id="mat-Floor">
+		<rgb value="1.000000 0.000000 0.300000" name="reflectance"/>
+	</bsdf>
+	<bsdf type="diffuse" id="empty-emitter-bsdf">
+		<rgb value="0.000000" name="reflectance"/>
+	</bsdf>
+
+<!-- Emitters -->
+
+	<shape type="ply">
+		<string name="filename" value="meshes/Cube.ply"/>
+		<boolean name="face_normals" value="true"/>
+		<ref id="empty-emitter-bsdf" name="bsdf"/>
+		<emitter type="area">
+			<rgb value="100.000000 100.000000 100.000000" name="radiance"/>
+		</emitter>
+	</shape>
+
+<!-- Shapes -->
+
+	<shape type="ply">
+		<string name="filename" value="meshes/Plane_001.ply"/>
+		<boolean name="face_normals" value="true"/>
+		<ref id="mat-Wall" name="bsdf"/>
+	</shape>
+	<shape type="ply">
+		<string name="filename" value="meshes/Cube_004.ply"/>
+		<boolean name="face_normals" value="true"/>
+		<ref id="mat-Wood" name="bsdf"/>
+	</shape>
+	<shape type="ply">
+		<string name="filename" value="meshes/Utah_teapot__solid_.ply"/>
+		<ref id="mat-Metal" name="bsdf"/>
+	</shape>
+	<shape type="ply">
+		<string name="filename" value="meshes/Utah_teapot__solid__001.ply"/>
+		<ref id="mat-Specular" name="bsdf"/>
+	</shape>
+	<shape type="ply">
+		<string name="filename" value="meshes/Utah_teapot__solid__002.ply"/>
+		<ref id="mat-Glass" name="bsdf"/>
+	</shape>
+	<shape type="ply">
+		<string name="filename" value="meshes/Plane_002.ply"/>
+		<boolean name="face_normals" value="true"/>
+		<ref id="mat-Wood" name="bsdf"/>
+	</shape>
+	<shape type="ply">
+		<string name="filename" value="meshes/Plane_003.ply"/>
+		<boolean name="face_normals" value="true"/>
+		<ref id="mat-Wood" name="bsdf"/>
+	</shape>
+	<shape type="ply">
+		<string name="filename" value="meshes/Plane_004.ply"/>
+		<boolean name="face_normals" value="true"/>
+		<ref id="mat-Floor" name="bsdf"/>
+	</shape>
+	<shape type="ply">
+		<string name="filename" value="meshes/Plane_005.ply"/>
+		<boolean name="face_normals" value="true"/>
+		<ref id="mat-Wall" name="bsdf"/>
+	</shape>
+	<shape type="ply">
+		<string name="filename" value="meshes/Plane_006.ply"/>
+		<boolean name="face_normals" value="true"/>
+		<ref id="mat-Wall" name="bsdf"/>
+	</shape>
+	<shape type="ply">
+		<string name="filename" value="meshes/Plane_007.ply"/>
+		<boolean name="face_normals" value="true"/>
+		<ref id="mat-Wall" name="bsdf"/>
+	</shape>
+	<shape type="ply">
+		<string name="filename" value="meshes/Plane_008.ply"/>
+		<boolean name="face_normals" value="true"/>
+		<ref id="mat-Wall" name="bsdf"/>
+	</shape>
+</scene>
