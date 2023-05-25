@@ -89,6 +89,7 @@ class NeradIntegrator(mi.SamplingIntegrator):
         self.total_steps = 1000
         self.lr = 5e-4
         self.seed = 42
+        self.sample_mode = "lhs"
 
     def sample_si(
         self,
@@ -309,8 +310,8 @@ class NeradIntegrator(mi.SamplingIntegrator):
             w_nr = β * mis_bsdf
 
         if mode == "drjit":
-            # T(E) + T(N)
-            return L + dr.select(active_nr, w_nr * mi.Spectrum(out), 0)
+            # E(x) + T(E(x')) + T(N(x'))
+            return Le1 + L + dr.select(active_nr, w_nr * mi.Spectrum(out), 0)
 
         elif mode == "torch":
             # T(E) + T(N)
@@ -334,7 +335,10 @@ class NeradIntegrator(mi.SamplingIntegrator):
 
             # update si and bsdf with the first non-specular ones
             si, β, _ = self.first_non_specular_or_null_si(scene, si, sampler)
-            L = self.render_lhs(scene, si, mode="drjit")
+            if self.sample_mode == "rhs":
+                L = self.render_rhs(scene, si, sampler, mode="drjit")
+            elif self.sample_mode == "lhs":
+                L = self.render_lhs(scene, si, mode="drjit")
 
         self.model.train()
         torch.cuda.empty_cache()
@@ -432,14 +436,15 @@ if __name__ == "__main__":
     }
 
     scene: mi.Scene = mi.load_dict(scene_dict)
+    scene = mi.load_file("./data/scenes/caustics/scene.xml")
 
     field = NRField(scene, n_hidden=3, width=256)
     integrator = NeradIntegrator(field)
     integrator.train()
-    image = mi.render(scene, spp=16, integrator=integrator)
+    image = mi.render(scene, spp=1, integrator=integrator)
     losses_orig = integrator.train_losses
 
-    ref_image = mi.render(scene, spp=2048)
+    ref_image = mi.render(scene, spp=16)
     pt_image = mi.render(scene, spp=16, integrator=mi.load_dict({"type": "ptracer"}))
 
     fig, ax = plt.subplots(2, 2, figsize=(10, 10))

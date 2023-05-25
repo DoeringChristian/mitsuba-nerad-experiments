@@ -43,18 +43,19 @@
 			<rgb value="0.800000 0.800000 0.800000" name="specular_reflectance"/>
 		</bsdf>
 	</bsdf>
+	<bsdf type="diffuse" id="empty-emitter-bsdf">
+		<rgb value="0.000000" name="reflectance"/>
+	</bsdf>
 
 <!-- Emitters -->
 
-	<shape type="rectangle">
-		<boolean name="flip_normals" value="true"/>
-		<transform name="to_world">
-			<matrix value="0.422909 0.079809 0.254516 1.000000 -0.254516 0.263488 0.340287 1.000000 -0.079809 -0.417378 0.263488 1.000000 0.000000 0.000000 0.000000 1.000000"/>
-		</transform>
+	<shape type="ply">
+		<string name="filename" value="meshes/Plane_002.ply"/>
+		<boolean name="face_normals" value="true"/>
+		<ref id="empty-emitter-bsdf" name="bsdf"/>
 		<emitter type="area">
-			<rgb value="2.500000 2.500000 2.500000" name="radiance"/>
+			<rgb value="11.500000 11.500000 11.500000" name="radiance"/>
 		</emitter>
-		<ref id="default-bsdf" name="bsdf"/>
 	</shape>
 
 <!-- Shapes -->
@@ -71,10 +72,5 @@
 	<shape type="ply">
 		<string name="filename" value="meshes/Cylinder_001.ply"/>
 		<ref id="mat-Metal" name="bsdf"/>
-	</shape>
-	<shape type="ply">
-		<string name="filename" value="meshes/Plane_001.ply"/>
-		<boolean name="face_normals" value="true"/>
-		<ref id="default-bsdf" name="bsdf"/>
 	</shape>
 </scene>
