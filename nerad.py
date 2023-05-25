@@ -229,8 +229,8 @@ class NeradIntegrator(mi.SamplingIntegrator):
         if mode == "drjit":
             return Le + dr.select(mask, mi.Spectrum(out), 0)
         elif mode == "torch":
-            # return Le.torch() + out * mask.torch().reshape(-1, 1)
             # In torch mode returns only the network output
+            # i.e. N(x, ω_o)
             return out * mask.torch().reshape(-1, 1)
 
     def render_rhs(
@@ -296,9 +296,7 @@ class NeradIntegrator(mi.SamplingIntegrator):
             si, β2, null_face = self.first_non_specular_or_null_si(scene, si, sampler)
             β *= β2
 
-            # L += β * mis * si.emitter(scene).eval(si)
-            # L_dir = β * mis_bsdf * si.emitter(scene).eval(si)
-
+            # T(E)
             L = β * mis_bsdf * si.emitter(scene).eval(si) + Lr_dir
 
             out = self.model(si)
@@ -311,9 +309,11 @@ class NeradIntegrator(mi.SamplingIntegrator):
             w_nr = β * mis_bsdf
 
         if mode == "drjit":
+            # T(E) + T(N)
             return L + dr.select(active_nr, w_nr * mi.Spectrum(out), 0)
 
         elif mode == "torch":
+            # T(E) + T(N)
             return L.torch() + out * dr.select(active_nr, w_nr, 0).torch()
 
     def sample(
@@ -389,19 +389,13 @@ class NeradIntegrator(mi.SamplingIntegrator):
 
             # LHS and RHS evaluation
             lhs = self.render_lhs(scene, si_lhs, mode="torch")
-            # _, Le_rhs, out_rhs, weight_rhs, mask_rhs = render_rhs(
-            #     scene, field, si_rhs, _r_sampler
-            # )
             rhs = self.render_rhs(scene, si_rhs, r_sampler, mode="torch")
-            # weight_rhs = weight_rhs.torch() * mask_rhs.torch()
 
-            # lhs = Le_lhs.torch() + out_lhs * mask_lhs.torch().reshape(-1, 1)
-            # rhs = Le_rhs.torch() + out_rhs * weight_rhs
             rhs = rhs.reshape(self.batch_size, self.M // 2, 3).mean(dim=1)
 
             norm = 1
             # in our experiment, normalization makes rendering biased (dimmer)
-            # norm = (lhs + rhs).detach()/2 + 1e-2
+            # norm = (lhs + rhs).detach() / 2 + 1e-2
 
             loss = torch.nn.MSELoss()(lhs / norm, rhs / norm)
             loss.backward()
