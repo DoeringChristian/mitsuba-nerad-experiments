@@ -29,17 +29,17 @@ if __name__ == "__main__":
     scene: mi.Scene = mi.load_dict(scene_dict)
 
     field = NRField(scene, n_hidden=3, width=256)
-    integrator = NeradIntegrator(field, M=16, total_steps=100)
+    integrator = NeradIntegrator(field, M=16, total_steps=1000)
     integrator.train(scene)
     image_independent = mi.render(scene, spp=16, integrator=integrator)
     losses_independent = integrator.train_losses
 
-    l_sampler: mi.Sampler = mi.load_dict({"type": "multijitter", "sample_count": 1})
-    r_sampler: mi.Sampler = mi.load_dict({"type": "multijitter", "sample_count": 1})
+    l_sampler: mi.Sampler = mi.load_dict({"type": "stratified", "sample_count": 1})
+    r_sampler: mi.Sampler = mi.load_dict({"type": "stratified", "sample_count": 1})
 
     field = NRField(scene, n_hidden=3, width=256)
     integrator = NeradIntegrator(
-        field, l_sampler=l_sampler, r_sampler=r_sampler, M=16, total_steps=100
+        field, l_sampler=l_sampler, r_sampler=r_sampler, M=16, total_steps=1000
     )
     integrator.train(scene)
     image_multi = mi.render(scene, spp=16, integrator=integrator)
