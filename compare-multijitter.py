@@ -29,7 +29,7 @@ if __name__ == "__main__":
     scene: mi.Scene = mi.load_dict(scene_dict)
 
     field = NRField(scene, n_hidden=3, width=256)
-    integrator = NeradIntegrator(field)
+    integrator = NeradIntegrator(field, M=16)
     integrator.train(scene)
     image_independent = mi.render(scene, spp=1, integrator=integrator)
     losses_independent = integrator.train_losses
@@ -38,7 +38,7 @@ if __name__ == "__main__":
     r_sampler: mi.Sampler = mi.load_dict({"type": "multijitter", "sample_count": 1})
 
     field = NRField(scene, n_hidden=3, width=256)
-    integrator = NeradIntegrator(field, l_sampler=l_sampler, r_sampler=r_sampler)
+    integrator = NeradIntegrator(field, l_sampler=l_sampler, r_sampler=r_sampler, M=16)
     integrator.train(scene)
     image_multi = mi.render(scene, spp=1, integrator=integrator)
     losses_multi = integrator.train_losses
@@ -47,11 +47,11 @@ if __name__ == "__main__":
     fig.patch.set_visible(False)
 
     ax[0][0].axis("off")
-    ax[0][0].imshow(mi.util.convert_bitmap(image_independent))
+    ax[0][0].imshow(mi.util.convert_to_bitmap(image_independent))
     ax[1][0].plot(losses_independent)
 
     ax[0][1].axis("off")
-    ax[0][1].imshow(mi.util.convert_bitmap(image_independent))
+    ax[0][1].imshow(mi.util.convert_to_bitmap(image_independent))
     ax[1][1].plot(losses_independent)
 
     fig.tight_layout()
