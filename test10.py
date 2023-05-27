@@ -1,16 +1,17 @@
 import drjit as dr
 import mitsuba as mi
 
-if __name__ == "__main__":
-    mi.set_variant("cuda_ad_rgb")
+mi.set_variant("cuda_ad_rgb")
+
+import os
 
 import matplotlib.pyplot as plt
 import numpy as np
 import torch
 import torch.nn as nn
-from mitsuba.python.ad.integrators.common import mis_weight
+from mitsuba.python.ad.integrators.common import ADIntegrator, mis_weight
 
-from tqdm import main, tqdm
+from tqdm import tqdm
 
 
 from tinycudann import Encoding as NGPEncoding
@@ -76,43 +77,23 @@ class NRField(nn.Module):
 
 
 class NeradIntegrator(mi.SamplingIntegrator):
-    def __init__(
-        self,
-        model,
-        batch_size=2**14,
-        M=32,
-        total_steps=1000,
-        lr=5e-4,
-        seed=42,
-        sample_mode="lhs",
-        l_sampler: mi.Sampler = mi.load_dict(
-            {"type": "independent", "sample_count": 1}
-        ),
-        r_sampler: mi.Sampler = mi.load_dict(
-            {"type": "independent", "sample_count": 1}
-        ),
-    ) -> None:
+    def __init__(self, model) -> None:
         super().__init__(mi.Properties())
         self.model = model
 
-        self.l_sampler = l_sampler
-        self.r_sampler = r_sampler
+        self.l_sampler: mi.Sampler = mi.load_dict(
+            {"type": "multijitter", "sample_count": 1}
+        )
+        self.r_sampler: mi.Sampler = mi.load_dict(
+            {"type": "multijitter", "sample_count": 1}
+        )
 
-        self.M = M
-        self.batch_size = batch_size
-        self.total_steps = total_steps
-        self.lr = lr
-        self.seed = seed
-        self.sample_mode = sample_mode
-        # self.l_sampler = mi.load_dict({"type": "independent", "sample_count": 1})
-        # self.r_sampler = mi.load_dict({"type": "independent", "sample_count": 1})
-
-        # self.M = 32
-        # self.batch_size = 2**14
-        # self.total_steps = 1000
-        # self.lr = 5e-4
-        # self.seed = 42
-        # self.sample_mode = "lhs"
+        self.M = 32
+        self.batch_size = 2**14
+        self.total_steps = 1000
+        self.lr = 5e-4
+        self.seed = 42
+        self.sample_mode = "lhs"
 
     def sample_si(
         self,
@@ -367,7 +348,7 @@ class NeradIntegrator(mi.SamplingIntegrator):
         torch.cuda.empty_cache()
         return β * L, si.is_valid(), []
 
-    def train(self, scene: mi.Scene):
+    def train(self):
         m_area = []
         for shape in scene.shapes():
             if not shape.is_emitter() and mi.has_flag(
@@ -386,7 +367,7 @@ class NeradIntegrator(mi.SamplingIntegrator):
 
         shape_sampler = mi.DiscreteDistribution(m_area)
 
-        optimizer = torch.optim.Adam(self.model.parameters(), lr=self.lr)
+        optimizer = torch.optim.Adam(field.parameters(), lr=self.lr)
         train_losses = []
         tqdm_iterator = tqdm(range(self.total_steps))
 
@@ -397,6 +378,7 @@ class NeradIntegrator(mi.SamplingIntegrator):
             # detach the computation graph of samplers to avoid lengthy graph of dr.jit
             r_sampler = self.r_sampler.clone()
             l_sampler = self.l_sampler.clone()
+
             r_sampler.seed(step, self.batch_size * self.M)
             l_sampler.seed(step, self.batch_size)
 
@@ -408,7 +390,7 @@ class NeradIntegrator(mi.SamplingIntegrator):
                 l_sampler.next_2d(),
             )
 
-            # copy `si_lhs` M times for RHS evaluation
+            # copy `si_lhs` M//2 times for RHS evaluation
             indices = dr.arange(mi.UInt, 0, self.batch_size)
             indices = dr.repeat(indices, self.M)
             si_rhs = dr.gather(type(si_lhs), si_lhs, indices)
@@ -464,7 +446,7 @@ if __name__ == "__main__":
 
     field = NRField(scene, n_hidden=3, width=256)
     integrator = NeradIntegrator(field)
-    integrator.train(scene)
+    integrator.train()
     image = mi.render(scene, spp=1, integrator=integrator)
     losses_orig = integrator.train_losses
 
