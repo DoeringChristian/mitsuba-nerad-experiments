@@ -9,7 +9,6 @@ import numpy as np
 import torch
 import torch.nn as nn
 from mitsuba.python.ad.integrators.common import mis_weight
-import nerad
 
 from tqdm import tqdm
 
@@ -359,7 +358,7 @@ class NeradIntegrator(mi.SamplingIntegrator):
         torch.cuda.empty_cache()
         return β * L, si.is_valid(), []
 
-    def train(self, scene: mi.Scene, steps: int):
+    def train(self, scene: mi.Scene, steps: int, detach_rhs: bool = False):
         m_area = []
         for shape in scene.shapes():
             if not shape.is_emitter() and mi.has_flag(
@@ -409,7 +408,10 @@ class NeradIntegrator(mi.SamplingIntegrator):
             lhs = self.render_lhs(scene, si_lhs, mode="torch")
             rhs = self.render_rhs(scene, si_rhs, r_sampler, mode="torch")
 
-            rhs = rhs.reshape(self.batch_size, self.M, 3).mean(dim=1).detach()
+            rhs = rhs.reshape(self.batch_size, self.M, 3).mean(dim=1)
+
+            if detach_rhs:
+                rhs = rhs.detach()
 
             norm = 1
             # in our experiment, normalization makes rendering biased (dimmer)
@@ -452,19 +454,21 @@ if __name__ == "__main__":
     # scene = mi.load_file("./data/scenes/caustics/scene.xml")
     # scene = mi.load_file("./data/scenes/veach-door/scene.xml")
 
+    torch.manual_seed(0)
     field = NRField(scene, n_hidden=3, width=256)
     integrator = NeradIntegrator(field, M=32)
-    torch.manual_seed(0)
-    integrator.train(scene, 100)
+    integrator.train(scene, 100, detach_rhs=True)
     image_lhs = mi.render(scene, spp=16, integrator=integrator)
     losses_lhs = integrator.losses
+    mi.util.write_bitmap("out/lhs-only.exr", image_lhs)
 
-    field = NRField(scene, n_hidden=3, width=256)
-    integrator = nerad.NeradIntegrator(field, M=32)
     torch.manual_seed(0)
-    integrator.train(scene, 100)
+    field = NRField(scene, n_hidden=3, width=256)
+    integrator = NeradIntegrator(field, M=32)
+    integrator.train(scene, 100, detach_rhs=False)
     image_both = mi.render(scene, spp=16, integrator=integrator)
     losses_both = integrator.losses
+    mi.util.write_bitmap("out/both.exr", image_both)
 
     ref_image = mi.render(scene, spp=1024)
     pt_image = mi.render(scene, spp=16, integrator=mi.load_dict({"type": "ptracer"}))
