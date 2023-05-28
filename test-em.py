@@ -1,15 +1,16 @@
 import drjit as dr
 import mitsuba as mi
 
-mi.set_variant("cuda_ad_rgb")
+if __name__ == "__main__":
+    mi.set_variant("cuda_ad_rgb")
 
-import os
+import nerad
 
 import matplotlib.pyplot as plt
 import numpy as np
 import torch
 import torch.nn as nn
-from mitsuba.python.ad.integrators.common import ADIntegrator, mis_weight
+from mitsuba.python.ad.integrators.common import mis_weight
 
 from tqdm import tqdm
 
@@ -77,23 +78,34 @@ class NRField(nn.Module):
 
 
 class NeradIntegrator(mi.SamplingIntegrator):
-    def __init__(self, model) -> None:
+    def __init__(
+        self,
+        model,
+        batch_size=2**14,
+        M=32,
+        total_steps=1000,
+        lr=5e-4,
+        seed=42,
+        sample_mode="lhs",
+        l_sampler: mi.Sampler = mi.load_dict(
+            {"type": "independent", "sample_count": 1}
+        ),
+        r_sampler: mi.Sampler = mi.load_dict(
+            {"type": "independent", "sample_count": 1}
+        ),
+    ) -> None:
         super().__init__(mi.Properties())
         self.model = model
 
-        self.l_sampler: mi.Sampler = mi.load_dict(
-            {"type": "multijitter", "sample_count": 1}
-        )
-        self.r_sampler: mi.Sampler = mi.load_dict(
-            {"type": "multijitter", "sample_count": 1}
-        )
+        self.l_sampler = l_sampler
+        self.r_sampler = r_sampler
 
-        self.M = 32
-        self.batch_size = 2**14
-        self.total_steps = 1000
-        self.lr = 5e-4
-        self.seed = 42
-        self.sample_mode = "lhs"
+        self.M = M
+        self.batch_size = batch_size
+        self.total_steps = total_steps
+        self.lr = lr
+        self.seed = seed
+        self.sample_mode = sample_mode
 
     def sample_si(
         self,
@@ -348,12 +360,10 @@ class NeradIntegrator(mi.SamplingIntegrator):
         torch.cuda.empty_cache()
         return β * L, si.is_valid(), []
 
-    def train(self):
+    def train(self, scene: mi.Scene):
         m_area = []
         for shape in scene.shapes():
-            if not shape.is_emitter() and mi.has_flag(
-                shape.bsdf().flags(), mi.BSDFFlags.Smooth
-            ):
+            if mi.has_flag(shape.bsdf().flags(), mi.BSDFFlags.Smooth):
                 m_area.append(shape.surface_area())
             else:
                 m_area.append([0.0])
@@ -367,7 +377,7 @@ class NeradIntegrator(mi.SamplingIntegrator):
 
         shape_sampler = mi.DiscreteDistribution(m_area)
 
-        optimizer = torch.optim.Adam(field.parameters(), lr=self.lr)
+        optimizer = torch.optim.Adam(self.model.parameters(), lr=self.lr)
         train_losses = []
         tqdm_iterator = tqdm(range(self.total_steps))
 
@@ -378,7 +388,6 @@ class NeradIntegrator(mi.SamplingIntegrator):
             # detach the computation graph of samplers to avoid lengthy graph of dr.jit
             r_sampler = self.r_sampler.clone()
             l_sampler = self.l_sampler.clone()
-
             r_sampler.seed(step, self.batch_size * self.M)
             l_sampler.seed(step, self.batch_size)
 
@@ -390,7 +399,7 @@ class NeradIntegrator(mi.SamplingIntegrator):
                 l_sampler.next_2d(),
             )
 
-            # copy `si_lhs` M//2 times for RHS evaluation
+            # copy `si_lhs` M times for RHS evaluation
             indices = dr.arange(mi.UInt, 0, self.batch_size)
             indices = dr.repeat(indices, self.M)
             si_rhs = dr.gather(type(si_lhs), si_lhs, indices)
@@ -446,22 +455,37 @@ if __name__ == "__main__":
 
     field = NRField(scene, n_hidden=3, width=256)
     integrator = NeradIntegrator(field)
-    integrator.train()
-    image = mi.render(scene, spp=1, integrator=integrator)
-    losses_orig = integrator.train_losses
+    integrator.train(scene)
+    image_em = mi.render(scene, spp=1, integrator=integrator)
+    losses_em = integrator.train_losses
+
+    field = NRField(scene, n_hidden=3, width=256)
+    integrator = nerad.NeradIntegrator(field)
+    integrator.train(scene)
+    image_noem = mi.render(scene, spp=1, integrator=integrator)
+    losses_noem = integrator.train_losses
 
     ref_image = mi.render(scene, spp=16)
     pt_image = mi.render(scene, spp=16, integrator=mi.load_dict({"type": "ptracer"}))
 
     fig, ax = plt.subplots(2, 2, figsize=(10, 10))
     fig.patch.set_visible(False)  # Hide the figure's background
-    ax[0][0].axis("off")  # Remove the axes from the image
-    ax[0][0].imshow(mi.util.convert_to_bitmap(image))
-    ax[1][0].axis("off")
-    ax[1][0].imshow(mi.util.convert_to_bitmap(ref_image))
+    ax[0][0].axis("off")
+    ax[0][0].imshow(mi.util.convert_to_bitmap(image_em))
+    ax[0][0].set_title("Emitter Sampling")
+
     ax[0][1].axis("off")
-    ax[0][1].imshow(mi.util.convert_to_bitmap(pt_image))
-    ax[1][1].plot(losses_orig, color="red")
+    ax[0][1].imshow(mi.util.convert_to_bitmap(image_noem))
+    ax[0][1].set_title("Without Emitter Sampling")
+
+    ax[1][0].plot(losses_em, label="Emitter Sampling")
+    ax[1][0].plot(losses_noem, label="Without Emitter Sampling")
+    ax[1][0].legend(loc="best")
+
+    ax[1][1].axis("off")
+    ax[1][1].imshow(mi.util.convert_to_bitmap(pt_image))
+    ax[1][1].set_title("Ref")
+
     fig.tight_layout()  # Remove any extra white spaces around the image
 
     plt.show()

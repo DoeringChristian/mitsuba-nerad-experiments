@@ -9,6 +9,7 @@ import numpy as np
 import torch
 import torch.nn as nn
 from mitsuba.python.ad.integrators.common import mis_weight
+import nerad
 
 from tqdm import tqdm
 
@@ -104,6 +105,15 @@ class NeradIntegrator(mi.SamplingIntegrator):
         self.lr = lr
         self.seed = seed
         self.sample_mode = sample_mode
+        # self.l_sampler = mi.load_dict({"type": "independent", "sample_count": 1})
+        # self.r_sampler = mi.load_dict({"type": "independent", "sample_count": 1})
+
+        # self.M = 32
+        # self.batch_size = 2**14
+        # self.total_steps = 1000
+        # self.lr = 5e-4
+        # self.seed = 42
+        # self.sample_mode = "lhs"
 
     def sample_si(
         self,
@@ -409,7 +419,7 @@ class NeradIntegrator(mi.SamplingIntegrator):
             lhs = self.render_lhs(scene, si_lhs, mode="torch")
             rhs = self.render_rhs(scene, si_rhs, r_sampler, mode="torch")
 
-            rhs = rhs.reshape(self.batch_size, self.M, 3).mean(dim=1)
+            rhs = rhs.reshape(self.batch_size, self.M, 3).mean(dim=1).detach()
 
             norm = 1
             # in our experiment, normalization makes rendering biased (dimmer)
@@ -456,21 +466,36 @@ if __name__ == "__main__":
     field = NRField(scene, n_hidden=3, width=256)
     integrator = NeradIntegrator(field)
     integrator.train(scene)
-    image = mi.render(scene, spp=1, integrator=integrator)
-    losses_orig = integrator.train_losses
+    image_lhs = mi.render(scene, spp=1, integrator=integrator)
+    losses_lhs = integrator.train_losses
 
-    ref_image = mi.render(scene, spp=16)
+    field = NRField(scene, n_hidden=3, width=256)
+    integrator = nerad.NeradIntegrator(field)
+    integrator.train(scene)
+    image_both = mi.render(scene, spp=1, integrator=integrator)
+    losses_both = integrator.train_losses
+
+    ref_image = mi.render(scene, spp=1024)
     pt_image = mi.render(scene, spp=16, integrator=mi.load_dict({"type": "ptracer"}))
 
     fig, ax = plt.subplots(2, 2, figsize=(10, 10))
     fig.patch.set_visible(False)  # Hide the figure's background
-    ax[0][0].axis("off")  # Remove the axes from the image
-    ax[0][0].imshow(mi.util.convert_to_bitmap(image))
-    ax[1][0].axis("off")
-    ax[1][0].imshow(mi.util.convert_to_bitmap(ref_image))
+    ax[0][0].axis("off")
+    ax[0][0].imshow(mi.util.convert_to_bitmap(image_lhs))
+    ax[0][0].set_title("LHS only")
+
     ax[0][1].axis("off")
-    ax[0][1].imshow(mi.util.convert_to_bitmap(pt_image))
-    ax[1][1].plot(losses_orig, color="red")
+    ax[0][1].imshow(mi.util.convert_to_bitmap(image_both))
+    ax[0][1].set_title("Both")
+
+    ax[1][0].plot(losses_lhs, label="LHS only")
+    ax[1][0].plot(losses_both, label="Both")
+    ax[1][0].legend(loc="best")
+
+    ax[1][1].axis("off")
+    ax[1][1].imshow(mi.util.convert_to_bitmap(ref_image))
+    ax[1][1].set_title("Ref")
+
     fig.tight_layout()  # Remove any extra white spaces around the image
 
     plt.show()
