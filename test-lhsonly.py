@@ -464,15 +464,15 @@ if __name__ == "__main__":
     # scene = mi.load_file("./data/scenes/veach-door/scene.xml")
 
     field = NRField(scene, n_hidden=3, width=256)
-    integrator = NeradIntegrator(field)
+    integrator = NeradIntegrator(field, total_steps=1000)
     integrator.train(scene)
-    image_lhs = mi.render(scene, spp=1, integrator=integrator)
+    image_lhs = mi.render(scene, spp=16, integrator=integrator)
     losses_lhs = integrator.train_losses
 
     field = NRField(scene, n_hidden=3, width=256)
-    integrator = nerad.NeradIntegrator(field)
+    integrator = nerad.NeradIntegrator(field, total_steps=1000)
     integrator.train(scene)
-    image_both = mi.render(scene, spp=1, integrator=integrator)
+    image_both = mi.render(scene, spp=16, integrator=integrator)
     losses_both = integrator.train_losses
 
     ref_image = mi.render(scene, spp=1024)

@@ -451,16 +451,17 @@ if __name__ == "__main__":
 
     scene: mi.Scene = mi.load_dict(scene_dict)
     # scene = mi.load_file("./data/scenes/caustics/scene.xml")
+    scene = mi.load_file("./data/scenes/cornell-box/scene.xml")
     # scene = mi.load_file("./data/scenes/veach-door/scene.xml")
 
     field = NRField(scene, n_hidden=3, width=256)
-    integrator = NeradIntegrator(field)
+    integrator = NeradIntegrator(field, total_steps=1000)
     integrator.train(scene)
     image_em = mi.render(scene, spp=1, integrator=integrator)
     losses_em = integrator.train_losses
 
     field = NRField(scene, n_hidden=3, width=256)
-    integrator = nerad.NeradIntegrator(field)
+    integrator = nerad.NeradIntegrator(field, total_steps=1000)
     integrator.train(scene)
     image_noem = mi.render(scene, spp=1, integrator=integrator)
     losses_noem = integrator.train_losses

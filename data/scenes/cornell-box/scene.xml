@@ -78,18 +78,19 @@
 		<float name="int_ior" value="1.450000"/>
 		<rgb value="1.000000 1.000000 1.000000" name="specular_transmittance"/>
 	</bsdf>
+	<bsdf type="diffuse" id="empty-emitter-bsdf">
+		<rgb value="0.000000" name="reflectance"/>
+	</bsdf>
 
 <!-- Emitters -->
 
-	<shape type="rectangle">
-		<boolean name="flip_normals" value="true"/>
-		<transform name="to_world">
-			<matrix value="0.500798 0.000000 0.000000 0.000000 0.000000 0.000000 0.500798 1.000000 0.000000 -0.500798 0.000000 0.000000 0.000000 0.000000 0.000000 1.000000"/>
-		</transform>
+	<shape type="ply">
+		<string name="filename" value="meshes/Plane_006.ply"/>
+		<boolean name="face_normals" value="true"/>
+		<ref id="empty-emitter-bsdf" name="bsdf"/>
 		<emitter type="area">
-			<rgb value="2.492043 2.492043 2.492043" name="radiance"/>
+			<rgb value="10.000000 10.000000 10.000000" name="radiance"/>
 		</emitter>
-		<bsdf type="null"/>
 	</shape>
 
 <!-- Shapes -->
