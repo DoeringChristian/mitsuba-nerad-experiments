@@ -128,7 +128,7 @@ class NeradIntegrator(mi.SamplingIntegrator):
             tuple of (mitsuba.SurfaceInteraction3f, mitsuba.BSDF)
         """
 
-        sample_emitter = sampler.next_1d() < 0.5
+        sample_emitter = sampler.next_1d() < 0.1
         emitter_idx, _, _ = scene.sample_emitter(sampler.next_1d())
         emitter: mi.Emitter = dr.gather(
             mi.EmitterPtr, scene.emitters_dr(), emitter_idx, sample_emitter
