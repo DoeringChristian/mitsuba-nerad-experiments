@@ -111,9 +111,7 @@ class NeradIntegrator(mi.SamplingIntegrator):
         self,
         scene: mi.Scene,
         shape_sampler: mi.DiscreteDistribution,
-        sample1,
-        sample2,
-        sample3,
+        sampler: mi.Sampler,
         active=True,
     ) -> mi.SurfaceInteraction3f:
         """Sample a batch of surface interactions with bsdfs.
@@ -129,19 +127,34 @@ class NeradIntegrator(mi.SamplingIntegrator):
         Returns:
             tuple of (mitsuba.SurfaceInteraction3f, mitsuba.BSDF)
         """
-        shape_index = shape_sampler.sample(sample1, active)
-        shape: mi.Shape = dr.gather(mi.ShapePtr, scene.shapes_dr(), shape_index, active)
 
-        ps = shape.sample_position(0.5, sample2, active)
+        sample_emitter = sampler.next_1d() < 0.5
+        emitter_idx, _, _ = scene.sample_emitter(sampler.next_1d())
+        emitter: mi.Emitter = dr.gather(
+            mi.EmitterPtr, scene.emitters_dr(), emitter_idx, sample_emitter
+        )
+        shape_em = emitter.shape()
+
+        ps_em, _ = emitter.sample_position(0.0, sampler.next_2d(), sample_emitter)
+
+        shape_index = shape_sampler.sample(sampler.next_1d(), ~sample_emitter)
+        shape: mi.Shape = dr.gather(
+            mi.ShapePtr, scene.shapes_dr(), shape_index, ~sample_emitter
+        )
+
+        ps = shape.sample_position(0.5, sampler.next_2d(), active)
+        ps = dr.select(sample_emitter, ps_em, ps)
         si = mi.SurfaceInteraction3f(ps, dr.zeros(mi.Color0f))
-        si.shape = shape
+        si.shape = dr.select(sample_emitter, shape_em, shape)
+
         bsdf = shape.bsdf()
 
         active_two_sided = mi.has_flag(bsdf.flags(), mi.BSDFFlags.BackSide)
+        sample = sampler.next_2d()
         si.wi = dr.select(
             active_two_sided,
-            mi.warp.square_to_uniform_sphere(sample3),
-            mi.warp.square_to_uniform_hemisphere(sample3),
+            mi.warp.square_to_uniform_sphere(sample),
+            mi.warp.square_to_uniform_hemisphere(sample),
         )
         si.shape = shape
 
@@ -391,13 +404,7 @@ class NeradIntegrator(mi.SamplingIntegrator):
             r_sampler.seed(step, self.batch_size * self.M)
             l_sampler.seed(step, self.batch_size)
 
-            si_lhs = self.sample_si(
-                scene,
-                shape_sampler,
-                l_sampler.next_1d(),
-                l_sampler.next_2d(),
-                l_sampler.next_2d(),
-            )
+            si_lhs = self.sample_si(scene, shape_sampler, l_sampler)
 
             # copy `si_lhs` M times for RHS evaluation
             indices = dr.arange(mi.UInt, 0, self.batch_size)

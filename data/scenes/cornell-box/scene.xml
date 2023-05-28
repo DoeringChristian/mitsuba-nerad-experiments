@@ -89,7 +89,7 @@
 		<boolean name="face_normals" value="true"/>
 		<ref id="empty-emitter-bsdf" name="bsdf"/>
 		<emitter type="area">
-			<rgb value="10.000000 10.000000 10.000000" name="radiance"/>
+			<rgb value="100.000000 100.000000 100.000000" name="radiance"/>
 		</emitter>
 	</shape>
 
