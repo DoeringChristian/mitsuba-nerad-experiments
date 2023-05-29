@@ -83,7 +83,6 @@ class NeradIntegrator(mi.SamplingIntegrator):
         model,
         batch_size=2**14,
         M=32,
-        total_steps=1000,
         lr=5e-4,
         seed=42,
         sample_mode="lhs",
@@ -102,10 +101,11 @@ class NeradIntegrator(mi.SamplingIntegrator):
 
         self.M = M
         self.batch_size = batch_size
-        self.total_steps = total_steps
         self.lr = lr
         self.seed = seed
         self.sample_mode = sample_mode
+
+        self.losses = []
 
     def sample_si(
         self,
@@ -373,7 +373,7 @@ class NeradIntegrator(mi.SamplingIntegrator):
         torch.cuda.empty_cache()
         return β * L, si.is_valid(), []
 
-    def train(self, scene: mi.Scene):
+    def train(self, scene: mi.Scene, steps: int):
         m_area = []
         for shape in scene.shapes():
             if mi.has_flag(shape.bsdf().flags(), mi.BSDFFlags.Smooth):
@@ -391,8 +391,7 @@ class NeradIntegrator(mi.SamplingIntegrator):
         shape_sampler = mi.DiscreteDistribution(m_area)
 
         optimizer = torch.optim.Adam(self.model.parameters(), lr=self.lr)
-        train_losses = []
-        tqdm_iterator = tqdm(range(self.total_steps))
+        tqdm_iterator = tqdm(range(steps))
 
         self.model.train()
         for step in tqdm_iterator:
@@ -427,9 +426,8 @@ class NeradIntegrator(mi.SamplingIntegrator):
             optimizer.step()
 
             tqdm_iterator.set_description("Loss %.04f" % (loss.item()))
-            train_losses.append(loss.item())
+            self.losses.append(loss.item())
         self.model.eval()
-        self.train_losses = train_losses
 
 
 # optimizer = torch.optim.Adam(field.parameters(), lr=lr)
@@ -459,19 +457,20 @@ if __name__ == "__main__":
     scene: mi.Scene = mi.load_dict(scene_dict)
     # scene = mi.load_file("./data/scenes/caustics/scene.xml")
     scene = mi.load_file("./data/scenes/cornell-box/scene.xml")
+    scene = mi.load_file("./data/scenes/donut/scene.xml")
     # scene = mi.load_file("./data/scenes/veach-door/scene.xml")
 
     field = NRField(scene, n_hidden=3, width=256)
-    integrator = NeradIntegrator(field, total_steps=1000)
-    integrator.train(scene)
+    integrator = NeradIntegrator(field)
+    integrator.train(scene, 100)
     image_em = mi.render(scene, spp=1, integrator=integrator)
-    losses_em = integrator.train_losses
+    losses_em = integrator.losses
 
     field = NRField(scene, n_hidden=3, width=256)
-    integrator = nerad.NeradIntegrator(field, total_steps=1000)
-    integrator.train(scene)
+    integrator = nerad.NeradIntegrator(field)
+    integrator.train(scene, 100)
     image_noem = mi.render(scene, spp=1, integrator=integrator)
-    losses_noem = integrator.train_losses
+    losses_noem = integrator.losses
 
     ref_image = mi.render(scene, spp=16)
     pt_image = mi.render(scene, spp=16, integrator=mi.load_dict({"type": "ptracer"}))

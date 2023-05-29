@@ -448,12 +448,13 @@ if __name__ == "__main__":
     }
 
     scene: mi.Scene = mi.load_dict(scene_dict)
+    # scene = mi.load_file("./data/scenes/donut/scene.xml")
     # scene = mi.load_file("./data/scenes/caustics/scene.xml")
     # scene = mi.load_file("./data/scenes/veach-door/scene.xml")
 
     field = NRField(scene, n_hidden=3, width=256)
     integrator = NeradIntegrator(field)
-    integrator.train(scene, 100)
+    integrator.train(scene, 1000)
     image = mi.render(scene, spp=1, integrator=integrator)
     losses_orig = integrator.losses
 
