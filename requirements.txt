@@ -9,3 +9,4 @@ psutil==5.9.4
 tensorboard==2.11.0
 tinycudann @ git+https://github.com/NVlabs/tiny-cuda-nn/@fd2058e19537a23204947fd8e48cb43b4dcb58ae#subdirectory=bindings/torch
 tqdm==4.64.1
+torch-cluster==1.6.1+pt20cu118

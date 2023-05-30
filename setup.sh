@@ -9,6 +9,7 @@ pip3 install torch torchvision torchaudio --index-url https://download.pytorch.o
 
 export PATH="/usr/local/cuda-11.8/bin:$PATH"
 export LD_LIBRARY_PATH="/usr/local/cuda-11.8/lib64:$LD_LIBRARY_PATH"
+# export CPATH="/usr/local/cuda-11.8/include"
 export CC=$CLANG
 export CXX=$CLANGXX
 
