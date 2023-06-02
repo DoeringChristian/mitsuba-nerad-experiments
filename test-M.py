@@ -453,23 +453,38 @@ if __name__ == "__main__":
     # scene = mi.load_file("./data/scenes/veach-door/scene.xml")
 
     field = NRField(scene, n_hidden=3, width=256)
-    integrator = NeradIntegrator(field)
+    integrator = NeradIntegrator(field, M=32)
     integrator.train(scene, 1000)
-    image = mi.render(scene, spp=1, integrator=integrator)
-    losses = integrator.losses
+    image_32 = mi.render(scene, spp=16, integrator=integrator)
+    losses_32 = integrator.losses
+
+    field = NRField(scene, n_hidden=3, width=256)
+    integrator = NeradIntegrator(field, M=8)
+    integrator.train(scene, 1000)
+    image_8 = mi.render(scene, spp=16, integrator=integrator)
+    losses_8 = integrator.losses
 
     ref_image = mi.render(scene, spp=16)
     pt_image = mi.render(scene, spp=16, integrator=mi.load_dict({"type": "ptracer"}))
 
     fig, ax = plt.subplots(2, 2, figsize=(10, 10))
     fig.patch.set_visible(False)  # Hide the figure's background
-    ax[0][0].axis("off")  # Remove the axes from the image
-    ax[0][0].imshow(mi.util.convert_to_bitmap(image))
-    ax[1][0].axis("off")
-    ax[1][0].imshow(mi.util.convert_to_bitmap(ref_image))
+    ax[0][0].axis("off")
+    ax[0][0].imshow(mi.util.convert_to_bitmap(image_8))
+    ax[0][0].set_title("M=8")
+
     ax[0][1].axis("off")
-    ax[0][1].imshow(mi.util.convert_to_bitmap(pt_image))
-    ax[1][1].plot(losses, color="red")
+    ax[0][1].imshow(mi.util.convert_to_bitmap(image_32))
+    ax[0][1].set_title("M=32")
+
+    ax[1][0].plot(losses_8, label="M=8")
+    ax[1][0].plot(losses_32, label="M=32")
+    ax[1][0].legend(loc="best")
+
+    ax[1][1].axis("off")
+    ax[1][1].imshow(mi.util.convert_to_bitmap(ref_image))
+    ax[1][1].set_title("Ref")
+
     fig.tight_layout()  # Remove any extra white spaces around the image
 
     plt.show()
